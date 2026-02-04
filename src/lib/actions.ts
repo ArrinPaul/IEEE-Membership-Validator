@@ -97,25 +97,24 @@ export async function uploadMembersCsv(
   await sleep(1000);
   const file = formData.get('csvFile') as File;
   if (!file || file.size === 0) {
-    return { status: 'error', message: 'Please select a CSV file to upload.' };
+    return { status: 'error', message: 'Please select a file to upload.' };
   }
 
-  if (file.type !== 'text/csv') {
-    return { status: 'error', message: 'Please upload a valid CSV file.' };
-  }
+  // Removed file type check to be more permissive, but only CSV parsing is supported.
+  // The try/catch block will handle non-text files.
 
   try {
     const text = await file.text();
     const lines = text.split('\n').filter(line => line.trim() !== '');
     if (lines.length <= 1) {
-      return { status: 'error', message: 'CSV file is empty or contains only a header.' };
+      return { status: 'error', message: 'The file is empty or contains only a header.' };
     }
 
     const csvHeaders = lines[0].split(',').map(h => h.trim());
     const expectedHeaders = [
         'Region', 'Section', 'School Section', 'School Name', 'Member Number', 
         'First Name', 'Middle Name', 'Last Name', 'Email Address', 'Grade', 'Gender',
-        'IEEE Status', 'Renew Year', 'Join Date', 'School Number', 'Home Number', 
+        'IEEE Status', 'Renew Year', 'School Number', 'Home Number', 
         'Active Society List', 'Technical Community List', 'Technical Council List', 'Special Interest Group List'
     ];
     
@@ -135,7 +134,6 @@ export async function uploadMembersCsv(
         name: `${values[headerMap['First Name']]} ${values[headerMap['Last Name']]}`,
         email: values[headerMap['Email Address']],
         membershipLevel: values[headerMap['IEEE Status']],
-        joinDate: values[headerMap['Join Date']],
         expiryDate: values[headerMap['Renew Year']],
 
         region: values[headerMap['Region']],
@@ -168,6 +166,6 @@ export async function uploadMembersCsv(
     };
   } catch (e) {
     const message = e instanceof Error ? e.message : 'An unknown error occurred.';
-    return { status: 'error', message: `Failed to process CSV file: ${message}` };
+    return { status: 'error', message: `Failed to process file. Please ensure it is a valid CSV file. Error: ${message}` };
   }
 }

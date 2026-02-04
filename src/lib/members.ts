@@ -3,7 +3,6 @@ export type Member = {
   name: string;
   email: string;
   membershipLevel: 'Student Member' | 'Member' | 'Senior Member' | string;
-  joinDate: string; // ISO 8601 format date
   expiryDate: string; // ISO 8601 format date
 
   // New optional fields from user request
@@ -39,7 +38,6 @@ export const members: Member[] = [
     email: 'alice.j@university.edu',
     emailAddress: 'alice.j@university.edu',
     membershipLevel: 'Student Member',
-    joinDate: '2022-09-01',
     expiryDate: getDateIn(180),
     firstName: 'Alice',
     lastName: 'Johnson',
@@ -57,7 +55,6 @@ export const members: Member[] = [
     email: 'bob.w@university.edu',
     emailAddress: 'bob.w@university.edu',
     membershipLevel: 'Member',
-    joinDate: '2021-03-15',
     expiryDate: getDateIn(30),
     firstName: 'Bob',
     lastName: 'Williams',
@@ -75,7 +72,6 @@ export const members: Member[] = [
     email: 'charlie.b@university.edu',
     emailAddress: 'charlie.b@university.edu',
     membershipLevel: 'Student Member',
-    joinDate: '2023-01-20',
     expiryDate: getDateIn(-90),
     firstName: 'Charlie',
     lastName: 'Brown',
@@ -93,7 +89,6 @@ export const members: Member[] = [
     email: 'diana.p@university.edu',
     emailAddress: 'diana.p@university.edu',
     membershipLevel: 'Senior Member',
-    joinDate: '2019-11-10',
     expiryDate: getDateIn(365),
     firstName: 'Diana',
     lastName: 'Prince',
@@ -112,7 +107,6 @@ export const members: Member[] = [
     email: 'eve.a@university.edu',
     emailAddress: 'eve.a@university.edu',
     membershipLevel: 'Member',
-    joinDate: '2020-08-01',
     expiryDate: getDateIn(-365),
     firstName: 'Eve',
     lastName: 'Adams',

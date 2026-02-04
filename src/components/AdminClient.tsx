@@ -63,7 +63,6 @@ export function AdminClient() {
                     <DetailRow label="Contact Number" value={state.member.homeNumber} />
                     <Separator />
                     <DetailRow label="Membership Level" value={state.member.membershipLevel} />
-                    <DetailRow label="Join Date" value={new Date(state.member.joinDate).toLocaleDateString()} />
                     <DetailRow label="Expiry Date" value={new Date(state.member.expiryDate).toLocaleDateString()} />
                     <DetailRow label="Renew Year" value={state.member.renewYear} />
                     <Separator />

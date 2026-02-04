@@ -66,12 +66,12 @@ export function CsvUploader() {
     <Card className="w-full shadow-lg">
       <CardHeader>
         <CardTitle className="text-2xl font-headline">Upload Members</CardTitle>
-        <CardDescription>Upload a CSV file with member data.</CardDescription>
+        <CardDescription>Upload a CSV or Excel file with member data.</CardDescription>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="space-y-4">
           <div>
-            <Input name="csvFile" type="file" accept=".csv" required />
+            <Input name="csvFile" type="file" accept=".csv,.xlsx,.xls" required />
           </div>
           <SubmitButton />
         </form>
@@ -80,7 +80,7 @@ export function CsvUploader() {
             {renderResult()}
         </div>
         <div className="mt-4 text-xs text-muted-foreground">
-          <p><strong>Note:</strong> The CSV file must contain all required headers, such as <code>Member Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Email Address</code>, <code>IEEE Status</code>, <code>Renew Year</code>, and <code>Join Date</code>. The column order does not matter.</p>
+          <p><strong>Note:</strong> For now, only <strong>.csv</strong> files are processed correctly. The file must contain all required headers, such as <code>Member Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Email Address</code>, <code>IEEE Status</code>, and <code>Renew Year</code>. The column order does not matter.</p>
         </div>
       </CardContent>
     </Card>
