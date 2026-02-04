@@ -14,6 +14,7 @@ export type Member = {
   firstName?: string;
   middleName?: string;
   lastName?: string;
+  emailAddress?: string;
   grade?: string;
   gender?: string;
   renewYear?: string;
@@ -36,6 +37,7 @@ export const members: Member[] = [
     id: '98765432',
     name: 'Alice Johnson',
     email: 'alice.j@university.edu',
+    emailAddress: 'alice.j@university.edu',
     membershipLevel: 'Student Member',
     joinDate: '2022-09-01',
     expiryDate: getDateIn(180),
@@ -47,11 +49,13 @@ export const members: Member[] = [
     grade: 'Graduate',
     gender: 'Female',
     renewYear: new Date(getDateIn(180)).getFullYear().toString(),
+    homeNumber: '111-222-3333',
   },
   {
     id: '12345678',
     name: 'Bob Williams',
     email: 'bob.w@university.edu',
+    emailAddress: 'bob.w@university.edu',
     membershipLevel: 'Member',
     joinDate: '2021-03-15',
     expiryDate: getDateIn(30),
@@ -63,11 +67,13 @@ export const members: Member[] = [
     grade: 'N/A',
     gender: 'Male',
     renewYear: new Date(getDateIn(30)).getFullYear().toString(),
+    homeNumber: '222-333-4444',
   },
   {
     id: '87654321',
     name: 'Charlie Brown',
     email: 'charlie.b@university.edu',
+    emailAddress: 'charlie.b@university.edu',
     membershipLevel: 'Student Member',
     joinDate: '2023-01-20',
     expiryDate: getDateIn(-90),
@@ -79,11 +85,13 @@ export const members: Member[] = [
     grade: 'Undergraduate',
     gender: 'Male',
     renewYear: new Date(getDateIn(-90)).getFullYear().toString(),
+    homeNumber: '333-444-5555',
   },
   {
     id: '23456789',
     name: 'Diana Prince',
     email: 'diana.p@university.edu',
+    emailAddress: 'diana.p@university.edu',
     membershipLevel: 'Senior Member',
     joinDate: '2019-11-10',
     expiryDate: getDateIn(365),
@@ -96,11 +104,13 @@ export const members: Member[] = [
     gender: 'Female',
     renewYear: new Date(getDateIn(365)).getFullYear().toString(),
     activeSocietyList: 'Computer Society, Power & Energy Society',
+    homeNumber: '444-555-6666',
   },
   {
     id: '99999999',
     name: 'Eve Adams',
     email: 'eve.a@university.edu',
+    emailAddress: 'eve.a@university.edu',
     membershipLevel: 'Member',
     joinDate: '2020-08-01',
     expiryDate: getDateIn(-365),
@@ -112,5 +122,6 @@ export const members: Member[] = [
     grade: 'N/A',
     gender: 'Female',
     renewYear: new Date(getDateIn(-365)).getFullYear().toString(),
+    homeNumber: '555-666-7777',
   },
 ];

@@ -5,7 +5,7 @@ import { members, type Member } from '@/lib/members';
 
 export type ValidationState = {
   status: 'valid' | 'invalid' | 'idle' | 'error';
-  member?: Pick<Member, 'id' | 'name' | 'expiryDate'>;
+  member?: Pick<Member, 'name' | 'expiryDate' | 'homeNumber'>;
   message?: string;
 };
 
@@ -51,19 +51,12 @@ export async function validateMembership(
     return { status: 'invalid', message: 'Membership ID not found.' };
   }
 
-  const expiry = new Date(member.expiryDate);
-  const now = new Date();
-  
-  if (expiry < now) {
-    return { status: 'invalid', message: 'This membership has expired.' };
-  }
-
   return {
     status: 'valid',
     member: {
-      id: member.id,
       name: member.name,
       expiryDate: member.expiryDate,
+      homeNumber: member.homeNumber,
     },
   };
 }

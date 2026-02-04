@@ -57,8 +57,10 @@ export function AdminClient() {
                 <dl className="text-sm space-y-2">
                     <Separator />
                     <DetailRow label="First Name" value={state.member.firstName} />
+                    <DetailRow label="Middle Name" value={state.member.middleName} />
                     <DetailRow label="Last Name" value={state.member.lastName} />
-                    <DetailRow label="Email" value={state.member.email} />
+                    <DetailRow label="Email Address" value={state.member.emailAddress} />
+                    <DetailRow label="Contact Number" value={state.member.homeNumber} />
                     <Separator />
                     <DetailRow label="Membership Level" value={state.member.membershipLevel} />
                     <DetailRow label="Join Date" value={new Date(state.member.joinDate).toLocaleDateString()} />
@@ -67,11 +69,16 @@ export function AdminClient() {
                     <Separator />
                     <DetailRow label="Region" value={state.member.region} />
                     <DetailRow label="Section" value={state.member.section} />
+                    <DetailRow label="School Section" value={state.member.schoolSection} />
                     <DetailRow label="School" value={state.member.schoolName} />
+                    <DetailRow label="School Number" value={state.member.schoolNumber} />
                     <DetailRow label="Grade" value={state.member.grade} />
                     <DetailRow label="Gender" value={state.member.gender} />
                     <Separator />
                     <DetailRow label="Active Societies" value={state.member.activeSocietyList} />
+                    <DetailRow label="Technical Communities" value={state.member.technicalCommunityList} />
+                    <DetailRow label="Technical Councils" value={state.member.technicalCouncilList} />
+                    <DetailRow label="Special Interest Groups" value={state.member.specialInterestGroupList} />
                 </dl>
             </CardContent>
           </Card>

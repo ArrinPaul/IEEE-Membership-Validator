@@ -28,16 +28,20 @@ export function ValidatorClient() {
   const renderResult = () => {
     switch (state.status) {
       case 'valid':
-        return state.member && (
-          <div className="rounded-lg border border-green-500 bg-green-50 p-4 text-green-800 dark:bg-green-950 dark:text-green-300">
+        if (!state.member) return null;
+        const isActive = new Date(state.member.expiryDate) > new Date();
+
+        return (
+          <div className={`rounded-lg border p-4 ${isActive ? 'border-green-500 bg-green-50 text-green-800 dark:bg-green-950 dark:text-green-300' : 'border-destructive/50 bg-destructive/10 text-destructive dark:bg-destructive/20'}`}>
             <div className="flex items-start gap-4">
-              <CheckCircle className="h-6 w-6 flex-shrink-0 text-green-500 mt-1" />
+              {isActive ? <CheckCircle className="h-6 w-6 flex-shrink-0 text-green-500 mt-1" /> : <XCircle className="h-6 w-6 flex-shrink-0 mt-1" />}
               <div>
-                <h3 className="font-bold font-headline">Valid Membership</h3>
+                <h3 className="font-bold font-headline">{isActive ? 'Valid & Active Membership' : 'Expired Membership'}</h3>
                 <dl className="mt-2 text-sm">
                   <div className="flex gap-2"><dt className="font-medium">Name:</dt><dd>{state.member.name}</dd></div>
-                  <div className="flex gap-2"><dt className="font-medium">ID:</dt><dd>{state.member.id}</dd></div>
+                  <div className="flex gap-2"><dt className="font-medium">Status:</dt><dd className="font-semibold">{isActive ? 'Active' : 'Expired'}</dd></div>
                   <div className="flex gap-2"><dt className="font-medium">Expires on:</dt><dd>{new Date(state.member.expiryDate).toLocaleDateString()}</dd></div>
+                  {state.member.homeNumber && <div className="flex gap-2"><dt className="font-medium">Contact:</dt><dd>{state.member.homeNumber}</dd></div>}
                 </dl>
               </div>
             </div>
