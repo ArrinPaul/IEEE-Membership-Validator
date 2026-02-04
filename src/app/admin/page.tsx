@@ -1,3 +1,5 @@
+'use client';
+
 import { AdminClient } from '@/components/AdminClient';
 import { CsvUploader } from '@/components/CsvUploader';
 
