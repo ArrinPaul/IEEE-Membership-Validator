@@ -15,6 +15,12 @@ export type AdminSearchState = {
   message?: string;
 };
 
+export type CsvUploadState = {
+  status: 'idle' | 'success' | 'error';
+  message?: string;
+  membersAdded?: number;
+};
+
 const MembershipSchema = z.object({
   membershipId: z.string().length(8, 'Membership ID must be 8 characters.'),
 });
@@ -89,4 +95,58 @@ export async function getAdminMemberDetails(
         status: 'found',
         member,
     };
+}
+
+export async function uploadMembersCsv(
+  prevState: CsvUploadState,
+  formData: FormData
+): Promise<CsvUploadState> {
+  await sleep(1000);
+  const file = formData.get('csvFile') as File;
+  if (!file || file.size === 0) {
+    return { status: 'error', message: 'Please select a CSV file to upload.' };
+  }
+
+  if (file.type !== 'text/csv') {
+    return { status: 'error', message: 'Please upload a valid CSV file.' };
+  }
+
+  try {
+    const text = await file.text();
+    const lines = text.split('\n').filter(line => line.trim() !== '');
+    if (lines.length <= 1) {
+      return { status: 'error', message: 'CSV file is empty or contains only a header.' };
+    }
+
+    const header = lines[0].split(',').map(h => h.trim());
+    const expectedHeaders = ['id', 'name', 'email', 'membershipLevel', 'joinDate', 'expiryDate'];
+    if (JSON.stringify(header) !== JSON.stringify(expectedHeaders)) {
+        return { status: 'error', message: `Invalid CSV headers. Expected: ${expectedHeaders.join(', ')}` };
+    }
+
+    const newMembers: Member[] = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split(',').map(v => v.trim());
+      const member: Member = {
+        id: values[0],
+        name: values[1],
+        email: values[2],
+        membershipLevel: values[3] as any,
+        joinDate: values[4],
+        expiryDate: values[5],
+      };
+      newMembers.push(member);
+    }
+
+    // In a real application, you would persist this data to a database.
+    // For this demo, we'll just confirm the number of members parsed.
+    return {
+      status: 'success',
+      message: `Successfully processed ${newMembers.length} members from the CSV.`,
+      membersAdded: newMembers.length
+    };
+  } catch (e) {
+    const message = e instanceof Error ? e.message : 'An unknown error occurred.';
+    return { status: 'error', message: `Failed to process CSV file: ${message}` };
+  }
 }

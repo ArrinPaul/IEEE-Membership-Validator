@@ -48,7 +48,7 @@ export function AdminClient() {
                 <CardTitle className="font-headline">{state.member.name}</CardTitle>
                 <CardDescription>Membership ID: {state.member.id}</CardDescription>
               </div>
-              <Badge variant={isActive ? 'default' : 'destructive'} className={isActive ? 'bg-green-600' : ''}>
+              <Badge variant={isActive ? 'default' : 'destructive'} className={isActive ? 'bg-green-600 text-white' : ''}>
                 {isActive ? 'Active' : 'Expired'}
               </Badge>
             </CardHeader>
@@ -100,7 +100,7 @@ export function AdminClient() {
           <SubmitButton />
         </form>
         
-        <div className="mt-4 min-h-[240px] transition-opacity duration-300">
+        <div className="mt-6 min-h-[240px] transition-opacity duration-300">
             {renderResult()}
         </div>
       </CardContent>
