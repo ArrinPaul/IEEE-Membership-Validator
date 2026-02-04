@@ -22,7 +22,7 @@ export type CsvUploadState = {
 };
 
 const MembershipSchema = z.object({
-  membershipId: z.string().min(1, 'Membership ID must not be empty.'),
+  membershipId: z.string().trim().min(1, 'Membership ID must not be empty.'),
 });
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -100,17 +100,20 @@ export async function uploadMembersCsv(
     return { status: 'error', message: 'Please select a file to upload.' };
   }
 
-  // Removed file type check to be more permissive, but only CSV parsing is supported.
   // The try/catch block will handle non-text files.
-
   try {
     const text = await file.text();
-    const lines = text.split('\n').filter(line => line.trim() !== '');
+    // Split by newline, supporting both Windows (\r\n) and Unix (\n)
+    const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
     if (lines.length <= 1) {
       return { status: 'error', message: 'The file is empty or contains only a header.' };
     }
-
-    const csvHeaders = lines[0].split(',').map(h => h.trim());
+    
+    const firstLine = lines[0];
+    // Handle potential UTF-8 BOM character at the start of the file
+    const headersRaw = firstLine.charCodeAt(0) === 0xFEFF ? firstLine.substring(1) : firstLine;
+    const csvHeaders = headersRaw.split(',').map(h => h.trim());
+    
     const expectedHeaders = [
         'Region', 'Section', 'School Section', 'School Name', 'Member Number', 
         'First Name', 'Middle Name', 'Last Name', 'Email Address', 'Grade', 'Gender',
