@@ -80,7 +80,7 @@ export function CsvUploader() {
             {renderResult()}
         </div>
         <div className="mt-4 text-xs text-muted-foreground">
-          <p><strong>Note:</strong> The CSV file must have the following headers in this order: <code>id,name,email,membershipLevel,joinDate,expiryDate</code>.</p>
+          <p><strong>Note:</strong> The CSV file must contain all required headers, such as <code>Member Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Email Address</code>, <code>IEEE Status</code>, <code>Renew Year</code>, and <code>Join Date</code>. The column order does not matter.</p>
         </div>
       </CardContent>
     </Card>

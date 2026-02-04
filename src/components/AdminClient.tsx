@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Loader2, UserSearch, XCircle, Search } from 'lucide-react';
 import { useFormStatus } from 'react-dom';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 
 const initialState: AdminSearchState = {
   status: 'idle',
@@ -26,9 +27,9 @@ function SubmitButton() {
 function DetailRow({ label, value }: { label: string; value: string | undefined }) {
     if (!value) return null;
     return (
-        <div className="flex items-center justify-between border-b py-3 last:border-b-0">
-            <dt className="text-muted-foreground">{label}</dt>
-            <dd className="font-medium text-foreground">{value}</dd>
+        <div className="flex items-start justify-between py-2">
+            <dt className="text-muted-foreground w-1/3">{label}</dt>
+            <dd className="font-medium text-foreground text-right w-2/3">{value}</dd>
         </div>
     );
 }
@@ -53,11 +54,24 @@ export function AdminClient() {
               </Badge>
             </CardHeader>
             <CardContent>
-                <dl className="text-sm">
+                <dl className="text-sm space-y-2">
+                    <Separator />
+                    <DetailRow label="First Name" value={state.member.firstName} />
+                    <DetailRow label="Last Name" value={state.member.lastName} />
                     <DetailRow label="Email" value={state.member.email} />
+                    <Separator />
                     <DetailRow label="Membership Level" value={state.member.membershipLevel} />
                     <DetailRow label="Join Date" value={new Date(state.member.joinDate).toLocaleDateString()} />
                     <DetailRow label="Expiry Date" value={new Date(state.member.expiryDate).toLocaleDateString()} />
+                    <DetailRow label="Renew Year" value={state.member.renewYear} />
+                    <Separator />
+                    <DetailRow label="Region" value={state.member.region} />
+                    <DetailRow label="Section" value={state.member.section} />
+                    <DetailRow label="School" value={state.member.schoolName} />
+                    <DetailRow label="Grade" value={state.member.grade} />
+                    <DetailRow label="Gender" value={state.member.gender} />
+                    <Separator />
+                    <DetailRow label="Active Societies" value={state.member.activeSocietyList} />
                 </dl>
             </CardContent>
           </Card>
@@ -89,12 +103,12 @@ export function AdminClient() {
     <Card className="w-full shadow-lg">
       <CardHeader>
         <CardTitle className="text-2xl font-headline">Member Details</CardTitle>
-        <CardDescription>Enter the 8-digit membership ID.</CardDescription>
+        <CardDescription>Enter the membership ID.</CardDescription>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="space-y-4">
           <div>
-            <Input name="membershipId" placeholder="e.g., 12345678" maxLength={8} required className="text-base" />
+            <Input name="membershipId" placeholder="e.g., 12345678" required className="text-base" />
             {state.status === 'error' && <p className="text-sm text-destructive mt-2">{state.message}</p>}
           </div>
           <SubmitButton />

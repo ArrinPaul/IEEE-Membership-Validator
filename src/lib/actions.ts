@@ -22,7 +22,7 @@ export type CsvUploadState = {
 };
 
 const MembershipSchema = z.object({
-  membershipId: z.string().length(8, 'Membership ID must be 8 characters.'),
+  membershipId: z.string().min(1, 'Membership ID must not be empty.'),
 });
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -118,22 +118,50 @@ export async function uploadMembersCsv(
       return { status: 'error', message: 'CSV file is empty or contains only a header.' };
     }
 
-    const header = lines[0].split(',').map(h => h.trim());
-    const expectedHeaders = ['id', 'name', 'email', 'membershipLevel', 'joinDate', 'expiryDate'];
-    if (JSON.stringify(header) !== JSON.stringify(expectedHeaders)) {
-        return { status: 'error', message: `Invalid CSV headers. Expected: ${expectedHeaders.join(', ')}` };
+    const csvHeaders = lines[0].split(',').map(h => h.trim());
+    const expectedHeaders = [
+        'Region', 'Section', 'School Section', 'School Name', 'Member Number', 
+        'First Name', 'Middle Name', 'Last Name', 'Email Address', 'Grade', 'Gender',
+        'IEEE Status', 'Renew Year', 'Join Date', 'School Number', 'Home Number', 
+        'Active Society List', 'Technical Community List', 'Technical Council List', 'Special Interest Group List'
+    ];
+    
+    const missingHeaders = expectedHeaders.filter(h => !csvHeaders.includes(h));
+    if (missingHeaders.length > 0) {
+        return { status: 'error', message: `Invalid CSV headers. Missing: ${missingHeaders.join(', ')}` };
     }
+
+    const headerMap = Object.fromEntries(csvHeaders.map((h, i) => [h, i]));
 
     const newMembers: Member[] = [];
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim());
+      
       const member: Member = {
-        id: values[0],
-        name: values[1],
-        email: values[2],
-        membershipLevel: values[3] as any,
-        joinDate: values[4],
-        expiryDate: values[5],
+        id: values[headerMap['Member Number']],
+        name: `${values[headerMap['First Name']]} ${values[headerMap['Last Name']]}`,
+        email: values[headerMap['Email Address']],
+        membershipLevel: values[headerMap['IEEE Status']],
+        joinDate: values[headerMap['Join Date']],
+        expiryDate: values[headerMap['Renew Year']],
+
+        region: values[headerMap['Region']],
+        section: values[headerMap['Section']],
+        schoolSection: values[headerMap['School Section']],
+        schoolName: values[headerMap['School Name']],
+        firstName: values[headerMap['First Name']],
+        middleName: values[headerMap['Middle Name']],
+        lastName: values[headerMap['Last Name']],
+        emailAddress: values[headerMap['Email Address']],
+        grade: values[headerMap['Grade']],
+        gender: values[headerMap['Gender']],
+        renewYear: values[headerMap['Renew Year']],
+        schoolNumber: values[headerMap['School Number']],
+        homeNumber: values[headerMap['Home Number']],
+        activeSocietyList: values[headerMap['Active Society List']],
+        technicalCommunityList: values[headerMap['Technical Community List']],
+        technicalCouncilList: values[headerMap['Technical Council List']],
+        specialInterestGroupList: values[headerMap['Special Interest Group List']],
       };
       newMembers.push(member);
     }

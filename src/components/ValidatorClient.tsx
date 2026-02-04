@@ -70,12 +70,12 @@ export function ValidatorClient() {
     <Card className="w-full shadow-lg">
       <CardHeader>
         <CardTitle className="text-2xl font-headline">Check Membership</CardTitle>
-        <CardDescription>Enter the 8-digit membership ID below.</CardDescription>
+        <CardDescription>Enter the membership ID below.</CardDescription>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="space-y-4">
           <div>
-             <Input name="membershipId" placeholder="e.g., 98765432" maxLength={8} required className="text-base" />
+             <Input name="membershipId" placeholder="e.g., 98765432" required className="text-base" />
              {state.status === 'error' && <p className="text-sm text-destructive mt-2">{state.message}</p>}
           </div>
           <SubmitButton />
