@@ -128,14 +128,14 @@ export async function uploadMembersCsv(
     const newMembers: Member[] = [];
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(v => v.trim());
+      const renewYear = values[headerMap['Renew Year']];
       
       const member: Member = {
         id: values[headerMap['Member Number']],
         name: `${values[headerMap['First Name']]} ${values[headerMap['Last Name']]}`,
         email: values[headerMap['Email Address']],
         membershipLevel: values[headerMap['IEEE Status']],
-        expiryDate: values[headerMap['Renew Year']],
-
+        expiryDate: renewYear ? `${renewYear}-12-31` : new Date().toISOString().split('T')[0],
         region: values[headerMap['Region']],
         section: values[headerMap['Section']],
         schoolSection: values[headerMap['School Section']],
@@ -157,11 +157,19 @@ export async function uploadMembersCsv(
       newMembers.push(member);
     }
 
-    // In a real application, you would persist this data to a database.
-    // For this demo, we'll just confirm the number of members parsed.
+    // Add/update members in the main in-memory array
+    newMembers.forEach(newMember => {
+      const existingIndex = members.findIndex(m => m.id === newMember.id);
+      if (existingIndex !== -1) {
+        members[existingIndex] = newMember; // Update if exists
+      } else {
+        members.push(newMember); // Add if new
+      }
+    });
+
     return {
       status: 'success',
-      message: `Successfully processed ${newMembers.length} members from the CSV.`,
+      message: `Successfully processed and loaded ${newMembers.length} members.`,
       membersAdded: newMembers.length
     };
   } catch (e) {

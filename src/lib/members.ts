@@ -31,7 +31,7 @@ const getDateIn = (days: number): string => {
   return date.toISOString().split('T')[0];
 };
 
-export const members: Member[] = [
+export let members: Member[] = [
   {
     id: '98765432',
     name: 'Alice Johnson',
