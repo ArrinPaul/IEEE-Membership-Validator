@@ -157,19 +157,13 @@ export async function uploadMembersCsv(
       newMembers.push(member);
     }
 
-    // Add/update members in the main in-memory array
-    newMembers.forEach(newMember => {
-      const existingIndex = members.findIndex(m => m.id === newMember.id);
-      if (existingIndex !== -1) {
-        members[existingIndex] = newMember; // Update if exists
-      } else {
-        members.push(newMember); // Add if new
-      }
-    });
+    // Replace the in-memory member list with the content of the file.
+    members.length = 0; // Clear the existing array
+    members.push(...newMembers); // Add all new members
 
     return {
       status: 'success',
-      message: `Successfully processed and loaded ${newMembers.length} members.`,
+      message: `Successfully loaded ${newMembers.length} members. The validator will now use only this data.`,
       membersAdded: newMembers.length
     };
   } catch (e) {
