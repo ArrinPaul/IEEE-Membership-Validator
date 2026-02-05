@@ -6,7 +6,7 @@ import type { Member as InMemoryMember } from '@/lib/members';
 import * as XLSX from 'xlsx';
 import { db, members as dbMembers, datasets as dbDatasets } from '@/lib/db';
 import { eq, or, ilike, sql, and, desc } from 'drizzle-orm';
-import { put } from '@vercel/blob';
+import { put, del } from '@vercel/blob';
 import { revalidatePath } from 'next/cache';
 
 // Re-export Member type for external use
@@ -19,6 +19,8 @@ export type ValidationState = {
     name: string;
     expiryDate: string;
     membershipLevel?: string;
+    region?: string;
+    schoolName?: string;
   };
   message?: string;
 };
@@ -206,8 +208,8 @@ function mapDbToMember(m: any): InMemoryMember {
     grade: m.grade || '',
     gender: m.gender || '',
     renewYear: m.renewYear || '',
-    schoolNumber: '', // Removed from DB but kept for type compatibility
-    homeNumber: '', // Removed from DB but kept for type compatibility
+    schoolNumber: '', 
+    homeNumber: '', 
     activeSocietyList: m.activeSocietyList || '',
     technicalCommunityList: m.technicalCommunityList || '',
     technicalCouncilList: m.technicalCouncilList || '',
@@ -312,15 +314,12 @@ export async function uploadMembersCsv(
   }
 
   try {
-    // 1. Upload to Vercel Blob for persistent storage
     const blob = await put(file.name, file, { access: 'public' });
-    
-    // 2. Parse file locally to get data for initial activation
-    let headers: string[];
-    let rows: string[][];
     const buffer = await file.arrayBuffer();
     const fileName = file.name.toLowerCase();
 
+    let headers: string[];
+    let rows: string[][];
     if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
       const result = await parseExcel(buffer);
       headers = result.headers;
@@ -341,57 +340,51 @@ export async function uploadMembersCsv(
     
     const missingHeaders = expectedHeaders.filter(h => !headers.includes(h));
     if (missingHeaders.length > 0) {
-      return { 
-        status: 'error', 
-        message: `Invalid file headers. Missing: ${missingHeaders.join(', ')}` 
-      };
+      return { status: 'error', message: `Invalid headers. Missing: ${missingHeaders.join(', ')}` };
     }
 
     const headerMap = Object.fromEntries(headers.map((h, i) => [h, i]));
     const membersData = rows.map(row => rowToDbMember(row, headerMap));
 
     if (db) {
-      // 3. Save dataset metadata
       const [dataset] = await db.insert(dbDatasets).values({
-        name: file.name,
-        url: blob.url,
-        rowCount: membersData.length,
-        isActive: true
+        name: file.name, url: blob.url, rowCount: membersData.length, isActive: true
       }).returning();
 
-      // 4. Update all other datasets to NOT active
       await db.update(dbDatasets).set({ isActive: false }).where(sql`id != ${dataset.id}`);
 
-      // 5. Populate members table
-      await db.delete(dbMembers);
       const batchSize = 100;
       for (let i = 0; i < membersData.length; i += batchSize) {
-        await db.insert(dbMembers).values(membersData.slice(i, i + batchSize));
+        await db.insert(dbMembers).values(membersData.slice(i, i + batchSize)).onConflictDoUpdate({
+          target: dbMembers.memberNumber,
+          set: {
+            firstName: sql`EXCLUDED.first_name`,
+            middleName: sql`EXCLUDED.middle_name`,
+            lastName: sql`EXCLUDED.last_name`,
+            email: sql`EXCLUDED.email`,
+            membershipLevel: sql`EXCLUDED.membership_level`,
+            expiryDate: sql`EXCLUDED.expiry_date`,
+            region: sql`EXCLUDED.region`,
+            section: sql`EXCLUDED.section`,
+            schoolSection: sql`EXCLUDED.school_section`,
+            schoolName: sql`EXCLUDED.school_name`,
+            grade: sql`EXCLUDED.grade`,
+            gender: sql`EXCLUDED.gender`,
+            renewYear: sql`EXCLUDED.renew_year`,
+            activeSocietyList: sql`EXCLUDED.active_society_list`,
+            technicalCommunityList: sql`EXCLUDED.technical_community_list`,
+            technicalCouncilList: sql`EXCLUDED.technical_council_list`,
+            specialInterestGroupList: sql`EXCLUDED.special_interest_group_list`,
+            updatedAt: new Date(),
+          }
+        });
       }
-      
       revalidatePath('/admin');
-      return {
-        status: 'success',
-        message: `Successfully uploaded ${file.name} to cloud storage and activated it.`,
-        membersAdded: membersData.length,
-        datasetId: dataset.id
-      };
-    } else {
-        // Fallback for local development without DB
-        inMemoryMembers.length = 0;
-        inMemoryMembers.push(...rows.map(row => mapDbToMember(rowToDbMember(row, headerMap))));
-        return {
-            status: 'success',
-            message: `Loaded ${rows.length} members into memory (No DB configured).`,
-            membersAdded: rows.length
-        };
+      return { status: 'success', message: 'Dataset uploaded and deduplicated.', membersAdded: membersData.length };
     }
+    return { status: 'error', message: 'Database not connected.' };
   } catch (e) {
-    const message = e instanceof Error ? e.message : 'An unknown error occurred.';
-    return { 
-      status: 'error', 
-      message: `Failed to process file. Error: ${message}` 
-    };
+    return { status: 'error', message: e instanceof Error ? e.message : 'Unknown error' };
   }
 }
 
@@ -401,67 +394,92 @@ export async function getDatasets(): Promise<DatasetInfo[]> {
   if (!db) return [];
   const results = await db.select().from(dbDatasets).orderBy(desc(dbDatasets.createdAt));
   return results.map(d => ({
-    id: d.id,
-    name: d.name,
-    url: d.url,
-    rowCount: d.rowCount || 0,
-    isActive: d.isActive || false,
-    createdAt: d.createdAt?.toISOString() || ''
+    id: d.id, name: d.name, url: d.url, rowCount: d.rowCount || 0, isActive: d.isActive || false, createdAt: d.createdAt?.toISOString() || ''
   }));
 }
 
 export async function activateDataset(datasetId: number): Promise<{ success: boolean; message: string }> {
   if (!db) return { success: false, message: 'Database not configured.' };
-
   try {
     const [dataset] = await db.select().from(dbDatasets).where(eq(dbDatasets.id, datasetId)).limit(1);
     if (!dataset) return { success: false, message: 'Dataset not found.' };
 
-    // 1. Fetch file from Vercel Blob
     const response = await fetch(dataset.url);
     const buffer = await response.arrayBuffer();
     
-    // 2. Parse
-    let headers: string[];
-    let rows: string[][];
+    let headers: string[], rows: string[][];
     if (dataset.url.toLowerCase().endsWith('.xlsx') || dataset.url.toLowerCase().endsWith('.xls')) {
       const result = await parseExcel(buffer);
-      headers = result.headers;
-      rows = result.rows;
+      headers = result.headers; rows = result.rows;
     } else {
-      const text = new TextDecoder().decode(buffer);
-      const result = parseCsv(text);
-      headers = result.headers;
-      rows = result.rows;
+      const result = parseCsv(new TextDecoder().decode(buffer));
+      headers = result.headers; rows = result.rows;
     }
 
     const headerMap = Object.fromEntries(headers.map((h, i) => [h, i]));
     const membersData = rows.map(row => rowToDbMember(row, headerMap));
 
-    // 3. Update active status in DB
     await db.update(dbDatasets).set({ isActive: false });
     await db.update(dbDatasets).set({ isActive: true }).where(eq(dbDatasets.id, datasetId));
 
-    // 4. Update members table
-    await db.delete(dbMembers);
     const batchSize = 100;
     for (let i = 0; i < membersData.length; i += batchSize) {
-      await db.insert(dbMembers).values(membersData.slice(i, i + batchSize));
+      await db.insert(dbMembers).values(membersData.slice(i, i + batchSize)).onConflictDoUpdate({
+        target: dbMembers.memberNumber,
+        set: {
+          firstName: sql`EXCLUDED.first_name`,
+          middleName: sql`EXCLUDED.middle_name`,
+          lastName: sql`EXCLUDED.last_name`,
+          email: sql`EXCLUDED.email`,
+          membershipLevel: sql`EXCLUDED.membership_level`,
+          expiryDate: sql`EXCLUDED.expiry_date`,
+          region: sql`EXCLUDED.region`,
+          section: sql`EXCLUDED.section`,
+          schoolSection: sql`EXCLUDED.school_section`,
+          schoolName: sql`EXCLUDED.school_name`,
+          grade: sql`EXCLUDED.grade`,
+          gender: sql`EXCLUDED.gender`,
+          renewYear: sql`EXCLUDED.renew_year`,
+          activeSocietyList: sql`EXCLUDED.active_society_list`,
+          technicalCommunityList: sql`EXCLUDED.technical_community_list`,
+          technicalCouncilList: sql`EXCLUDED.technical_council_list`,
+          specialInterestGroupList: sql`EXCLUDED.special_interest_group_list`,
+          updatedAt: new Date(),
+        }
+      });
     }
-
     revalidatePath('/admin');
-    return { success: true, message: `Dataset "${dataset.name}" is now active.` };
+    return { success: true, message: `Dataset "${dataset.name}" merged.` };
   } catch (e) {
-    return { success: false, message: e instanceof Error ? e.message : 'Activation failed.' };
+    return { success: false, message: 'Activation failed.' };
   }
 }
 
 export async function deleteDataset(datasetId: number): Promise<{ success: boolean; message: string }> {
     if (!db) return { success: false, message: 'Database not configured.' };
-    // Implementation for deletion could be added here (including Blob deletion)
-    await db.delete(dbDatasets).where(eq(dbDatasets.id, datasetId));
-    revalidatePath('/admin');
-    return { success: true, message: 'Dataset record removed.' };
+    try {
+      const [dataset] = await db.select().from(dbDatasets).where(eq(dbDatasets.id, datasetId)).limit(1);
+      if (dataset) {
+        await del(dataset.url);
+        await db.delete(dbDatasets).where(eq(dbDatasets.id, datasetId));
+        revalidatePath('/admin');
+        return { success: true, message: 'Dataset and file removed.' };
+      }
+      return { success: false, message: 'Dataset not found.' };
+    } catch (e) {
+      return { success: false, message: 'Failed to delete dataset.' };
+    }
+}
+
+export async function clearAllMembers(): Promise<{ success: boolean; message: string }> {
+    if (!db) return { success: false, message: 'Database not configured.' };
+    try {
+        await db.delete(dbMembers);
+        revalidatePath('/admin');
+        return { success: true, message: 'All membership data wiped.' };
+    } catch (e) {
+        return { success: false, message: 'Wipe failed.' };
+    }
 }
 
 // ============ SEARCH & FILTER ACTIONS ============
@@ -500,26 +518,7 @@ export async function searchMembers(filters: SearchFilters, page = 1, pageSize =
       totalPages: Math.ceil(total / pageSize),
     };
   }
-
-  // Fallback to in-memory
-  let filtered = [...inMemoryMembers];
-  if (filters.query) {
-    const q = filters.query.toLowerCase();
-    filtered = filtered.filter(m => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q));
-  }
-  if (filters.status && filters.status !== 'all') {
-    filtered = filtered.filter(m => filters.status === 'active' ? isActiveMembership(m.expiryDate) : !isActiveMembership(m.expiryDate));
-  }
-  if (filters.region) filtered = filtered.filter(m => m.region === filters.region);
-  if (filters.school) filtered = filtered.filter(m => m.schoolName === filters.school);
-  if (filters.membershipLevel) filtered = filtered.filter(m => m.membershipLevel === filters.membershipLevel);
-
-  const total = filtered.length;
-  return {
-    members: filtered.slice((page - 1) * pageSize, page * pageSize),
-    total, page, pageSize,
-    totalPages: Math.ceil(total / pageSize),
-  };
+  return { members: [], total: 0, page: 1, pageSize: 20, totalPages: 0 };
 }
 
 export async function getFilterOptions(): Promise<{
@@ -537,11 +536,7 @@ export async function getFilterOptions(): Promise<{
       membershipLevels: levels.map(l => l.val).filter(Boolean).sort() as string[],
     };
   }
-  return {
-    regions: [...new Set(inMemoryMembers.map(m => m.region).filter(Boolean))].sort() as string[],
-    schools: [...new Set(inMemoryMembers.map(m => m.schoolName).filter(Boolean))].sort() as string[],
-    membershipLevels: [...new Set(inMemoryMembers.map(m => m.membershipLevel).filter(Boolean))].sort() as string[],
-  };
+  return { regions: [], schools: [], membershipLevels: [] };
 }
 
 // ============ ANALYTICS ACTIONS ============
@@ -567,11 +562,7 @@ export async function getAnalytics(): Promise<AnalyticsData> {
         membersByStatus: [{ status: 'Active', count: active }, { status: 'Expired', count: total - active }],
     };
   }
-  const activeMembers = inMemoryMembers.filter(m => isActiveMembership(m.expiryDate));
-  return {
-    totalMembers: inMemoryMembers.length, activeMembers: activeMembers.length, expiredMembers: inMemoryMembers.length - activeMembers.length, expiringSoon: inMemoryMembers.filter(m => expiresSoon(m.expiryDate)).length,
-    membersByRegion: [], membersBySchool: [], membersByLevel: [], membersByStatus: [],
-  };
+  return { totalMembers: 0, activeMembers: 0, expiredMembers: 0, expiringSoon: 0, membersByRegion: [], membersBySchool: [], membersByLevel: [], membersByStatus: [] };
 }
 
 // ============ EXPORT ACTIONS ============
@@ -590,7 +581,7 @@ export async function getMembersCount(): Promise<number> {
       const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers);
       return Number(totalCount.count);
   }
-  return inMemoryMembers.length;
+  return 0;
 }
 
 export async function getAllMembersList(): Promise<InMemoryMember[]> {
@@ -598,5 +589,5 @@ export async function getAllMembersList(): Promise<InMemoryMember[]> {
       const dbResults = await db.select().from(dbMembers);
       return dbResults.map(mapDbToMember);
   }
-  return [...inMemoryMembers];
+  return [];
 }
