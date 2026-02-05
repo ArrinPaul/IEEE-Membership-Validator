@@ -34,7 +34,7 @@ export async function validateMembership(
   await sleep(1000); 
 
   const validatedFields = MembershipSchema.safeParse({
-    membershipId: formData.get('membershipId'),
+    membershipId: formData.get('membershipId')?.toString().trim(),
   });
 
   if (!validatedFields.success) {
@@ -67,7 +67,7 @@ export async function getAdminMemberDetails(
 ): Promise<AdminSearchState> {
     await sleep(1000);
     const validatedFields = MembershipSchema.safeParse({
-        membershipId: formData.get('membershipId'),
+        membershipId: formData.get('membershipId')?.toString().trim(),
     });
 
     if (!validatedFields.success) {
@@ -102,26 +102,32 @@ export async function uploadMembersCsv(
 
   try {
     const text = await file.text();
+    // Handle both Windows and Mac/Linux line endings
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
     if (lines.length <= 1) {
       return { status: 'error', message: 'The file is empty or contains only a header.' };
     }
     
+    // Handle potential BOM character at the start of the file
     const firstLine = lines[0];
     const headersRaw = firstLine.charCodeAt(0) === 0xFEFF ? firstLine.substring(1) : firstLine;
     
+    // More robust value cleaning
     const cleanCsvValue = (v: string) => {
         let value = v.trim();
-        if (value.startsWith('="') && value.endsWith('"')) {
-            return value.substring(2, value.length - 1);
-        }
+        // Remove surrounding quotes if they exist
         if (value.startsWith('"') && value.endsWith('"')) {
-            return value.substring(1, value.length - 1);
+            value = value.substring(1, value.length - 1);
         }
-        return value;
+        // Handle Excel's "=""...""" format
+        if (value.startsWith('="') && value.endsWith('"')) {
+            value = value.substring(2, value.length - 1);
+        }
+        // Replace double double-quotes with a single double-quote
+        return value.replace(/""/g, '"').trim();
     };
     
-    const csvHeaders = headersRaw.split(',').map(cleanCsvValue);
+    const csvHeaders = headersRaw.split(',').map(h => cleanCsvValue(h));
     
     const expectedHeaders = [
         'Region', 'Section', 'School Section', 'School Name', 'Member Number', 
@@ -140,14 +146,23 @@ export async function uploadMembersCsv(
     const newMembers: Member[] = [];
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split(',').map(cleanCsvValue);
-      const renewYear = values[headerMap['Renew Year']];
+      const renewYearValue = values[headerMap['Renew Year']];
       
+      let expiryDate = new Date().toISOString().split('T')[0]; // Default for safety
+      if (renewYearValue && !isNaN(parseInt(renewYearValue))) {
+        const expiryYear = parseInt(renewYearValue) + 1;
+        // The membership expires on Feb 27 of the year *after* the renew year.
+        // Months are 0-indexed, so 1 is February.
+        const expiry = new Date(expiryYear, 1, 27);
+        expiryDate = expiry.toISOString().split('T')[0];
+      }
+
       const member: Member = {
         id: values[headerMap['Member Number']],
         name: `${values[headerMap['First Name']]} ${values[headerMap['Last Name']]}`,
         email: values[headerMap['Email Address']],
         membershipLevel: values[headerMap['IEEE Status']],
-        expiryDate: renewYear ? `${renewYear}-12-31` : new Date().toISOString().split('T')[0],
+        expiryDate: expiryDate,
         region: values[headerMap['Region']],
         section: values[headerMap['Section']],
         schoolSection: values[headerMap['School Section']],
@@ -169,6 +184,7 @@ export async function uploadMembersCsv(
       newMembers.push(member);
     }
 
+    // Clear existing members and replace with the new list from the CSV
     members.length = 0;
     members.push(...newMembers);
 
