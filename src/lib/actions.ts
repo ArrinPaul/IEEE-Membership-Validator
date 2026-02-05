@@ -157,7 +157,7 @@ async function parseExcel(buffer: ArrayBuffer): Promise<{ headers: string[]; row
 }
 
 // Convert row data to member object for DB
-function rowToDbMember(values: string[], headerMap: Record<string, number>): any {
+function rowToDbMember(values: string[], headerMap: Record<string, number>, datasetId?: number): any {
   const getValue = (key: string) => values[headerMap[key]] || '';
   const renewYearValue = getValue('Renew Year');
   
@@ -186,6 +186,7 @@ function rowToDbMember(values: string[], headerMap: Record<string, number>): any
     technicalCommunityList: getValue('Technical Community List'),
     technicalCouncilList: getValue('Technical Council List'),
     specialInterestGroupList: getValue('Special Interest Group List'),
+    datasetId: datasetId
   };
 }
 
@@ -217,6 +218,15 @@ function mapDbToMember(m: any): InMemoryMember {
   };
 }
 
+/**
+ * Get the currently active dataset ID
+ */
+async function getActiveDatasetId(): Promise<number | null> {
+    if (!db) return null;
+    const [active] = await db.select({ id: dbDatasets.id }).from(dbDatasets).where(eq(dbDatasets.isActive, true)).limit(1);
+    return active?.id || null;
+}
+
 // ============ PUBLIC ACTIONS ============
 
 export async function validateMembership(
@@ -238,7 +248,18 @@ export async function validateMembership(
   
   let member;
   if (db) {
-    const results = await db.select().from(dbMembers).where(eq(dbMembers.memberNumber, membershipId)).limit(1);
+    const activeId = await getActiveDatasetId();
+    if (!activeId) {
+        return { status: 'invalid', message: 'No active dataset found. Please contact an administrator.' };
+    }
+
+    const results = await db.select().from(dbMembers)
+        .where(and(
+            eq(dbMembers.memberNumber, membershipId),
+            eq(dbMembers.datasetId, activeId)
+        ))
+        .limit(1);
+        
     if (results.length > 0) {
       member = mapDbToMember(results[0]);
     }
@@ -249,7 +270,7 @@ export async function validateMembership(
   if (!member) {
     return { 
       status: 'invalid', 
-      message: `Membership ID "${membershipId}" not found in the database.` 
+      message: `Membership ID "${membershipId}" not found in the active dataset.` 
     };
   }
 
@@ -286,7 +307,16 @@ export async function getAdminMemberDetails(
   
   let member;
   if (db) {
-    const results = await db.select().from(dbMembers).where(eq(dbMembers.memberNumber, membershipId)).limit(1);
+    const activeId = await getActiveDatasetId();
+    if (!activeId) return { status: 'error', message: 'No active dataset.' };
+
+    const results = await db.select().from(dbMembers)
+        .where(and(
+            eq(dbMembers.memberNumber, membershipId),
+            eq(dbMembers.datasetId, activeId)
+        ))
+        .limit(1);
+
     if (results.length > 0) {
       member = mapDbToMember(results[0]);
     }
@@ -295,7 +325,7 @@ export async function getAdminMemberDetails(
   }
 
   if (!member) {
-    return { status: 'not_found', message: 'Membership ID not found.' };
+    return { status: 'not_found', message: 'Membership ID not found in active dataset.' };
   }
 
   return {
@@ -344,43 +374,28 @@ export async function uploadMembersCsv(
     }
 
     const headerMap = Object.fromEntries(headers.map((h, i) => [h, i]));
-    const membersData = rows.map(row => rowToDbMember(row, headerMap));
 
     if (db) {
+      // 1. Create dataset record first to get ID
       const [dataset] = await db.insert(dbDatasets).values({
-        name: file.name, url: blob.url, rowCount: membersData.length, isActive: true
+        name: file.name, url: blob.url, rowCount: rows.length, isActive: true
       }).returning();
 
+      // 2. Map members with the new datasetId
+      const membersData = rows.map(row => rowToDbMember(row, headerMap, dataset.id));
+
+      // 3. Deactivate others
       await db.update(dbDatasets).set({ isActive: false }).where(sql`id != ${dataset.id}`);
 
+      // 4. Batch insert members
       const batchSize = 100;
       for (let i = 0; i < membersData.length; i += batchSize) {
-        await db.insert(dbMembers).values(membersData.slice(i, i + batchSize)).onConflictDoUpdate({
-          target: dbMembers.memberNumber,
-          set: {
-            firstName: sql`EXCLUDED.first_name`,
-            middleName: sql`EXCLUDED.middle_name`,
-            lastName: sql`EXCLUDED.last_name`,
-            email: sql`EXCLUDED.email`,
-            membershipLevel: sql`EXCLUDED.membership_level`,
-            expiryDate: sql`EXCLUDED.expiry_date`,
-            region: sql`EXCLUDED.region`,
-            section: sql`EXCLUDED.section`,
-            schoolSection: sql`EXCLUDED.school_section`,
-            schoolName: sql`EXCLUDED.school_name`,
-            grade: sql`EXCLUDED.grade`,
-            gender: sql`EXCLUDED.gender`,
-            renewYear: sql`EXCLUDED.renew_year`,
-            activeSocietyList: sql`EXCLUDED.active_society_list`,
-            technicalCommunityList: sql`EXCLUDED.technical_community_list`,
-            technicalCouncilList: sql`EXCLUDED.technical_council_list`,
-            specialInterestGroupList: sql`EXCLUDED.special_interest_group_list`,
-            updatedAt: new Date(),
-          }
-        });
+        await db.insert(dbMembers).values(membersData.slice(i, i + batchSize));
       }
+      
       revalidatePath('/admin');
-      return { status: 'success', message: 'Dataset uploaded and deduplicated.', membersAdded: membersData.length };
+      revalidatePath('/volunteer');
+      return { status: 'success', message: `Dataset "${file.name}" uploaded and set as active.`, membersAdded: membersData.length };
     }
     return { status: 'error', message: 'Database not connected.' };
   } catch (e) {
@@ -404,52 +419,14 @@ export async function activateDataset(datasetId: number): Promise<{ success: boo
     const [dataset] = await db.select().from(dbDatasets).where(eq(dbDatasets.id, datasetId)).limit(1);
     if (!dataset) return { success: false, message: 'Dataset not found.' };
 
-    const response = await fetch(dataset.url);
-    const buffer = await response.arrayBuffer();
-    
-    let headers: string[], rows: string[][];
-    if (dataset.url.toLowerCase().endsWith('.xlsx') || dataset.url.toLowerCase().endsWith('.xls')) {
-      const result = await parseExcel(buffer);
-      headers = result.headers; rows = result.rows;
-    } else {
-      const result = parseCsv(new TextDecoder().decode(buffer));
-      headers = result.headers; rows = result.rows;
-    }
-
-    const headerMap = Object.fromEntries(headers.map((h, i) => [h, i]));
-    const membersData = rows.map(row => rowToDbMember(row, headerMap));
-
+    // Simply toggle isActive
     await db.update(dbDatasets).set({ isActive: false });
     await db.update(dbDatasets).set({ isActive: true }).where(eq(dbDatasets.id, datasetId));
 
-    const batchSize = 100;
-    for (let i = 0; i < membersData.length; i += batchSize) {
-      await db.insert(dbMembers).values(membersData.slice(i, i + batchSize)).onConflictDoUpdate({
-        target: dbMembers.memberNumber,
-        set: {
-          firstName: sql`EXCLUDED.first_name`,
-          middleName: sql`EXCLUDED.middle_name`,
-          lastName: sql`EXCLUDED.last_name`,
-          email: sql`EXCLUDED.email`,
-          membershipLevel: sql`EXCLUDED.membership_level`,
-          expiryDate: sql`EXCLUDED.expiry_date`,
-          region: sql`EXCLUDED.region`,
-          section: sql`EXCLUDED.section`,
-          schoolSection: sql`EXCLUDED.school_section`,
-          schoolName: sql`EXCLUDED.school_name`,
-          grade: sql`EXCLUDED.grade`,
-          gender: sql`EXCLUDED.gender`,
-          renewYear: sql`EXCLUDED.renew_year`,
-          activeSocietyList: sql`EXCLUDED.active_society_list`,
-          technicalCommunityList: sql`EXCLUDED.technical_community_list`,
-          technicalCouncilList: sql`EXCLUDED.technical_council_list`,
-          specialInterestGroupList: sql`EXCLUDED.special_interest_group_list`,
-          updatedAt: new Date(),
-        }
-      });
-    }
     revalidatePath('/admin');
-    return { success: true, message: `Dataset "${dataset.name}" merged.` };
+    revalidatePath('/volunteer');
+    revalidatePath('/');
+    return { success: true, message: `Dataset "${dataset.name}" is now the active source.` };
   } catch (e) {
     return { success: false, message: 'Activation failed.' };
   }
@@ -460,14 +437,32 @@ export async function deleteDataset(datasetId: number): Promise<{ success: boole
     try {
       const [dataset] = await db.select().from(dbDatasets).where(eq(dbDatasets.id, datasetId)).limit(1);
       if (dataset) {
+        // 1. Delete linked file
         await del(dataset.url);
+        
+        // 2. Delete linked members (handled by CASCADE in schema, but being explicit)
+        await db.delete(dbMembers).where(eq(dbMembers.datasetId, datasetId));
+        
+        // 3. Delete dataset record
         await db.delete(dbDatasets).where(eq(dbDatasets.id, datasetId));
+        
         revalidatePath('/admin');
-        return { success: true, message: 'Dataset and file removed.' };
+        return { success: true, message: 'Dataset and its member data permanently removed.' };
       }
       return { success: false, message: 'Dataset not found.' };
     } catch (e) {
       return { success: false, message: 'Failed to delete dataset.' };
+    }
+}
+
+export async function deactivateAllDatasets(): Promise<{ success: boolean; message: string }> {
+    if (!db) return { success: false, message: 'Database not configured.' };
+    try {
+        await db.update(dbDatasets).set({ isActive: false });
+        revalidatePath('/admin');
+        return { success: true, message: 'All datasets disabled. App is currently empty.' };
+    } catch (e) {
+        return { success: false, message: 'Operation failed.' };
     }
 }
 
@@ -476,7 +471,7 @@ export async function clearAllMembers(): Promise<{ success: boolean; message: st
     try {
         await db.delete(dbMembers);
         revalidatePath('/admin');
-        return { success: true, message: 'All membership data wiped.' };
+        return { success: true, message: 'All membership records wiped.' };
     } catch (e) {
         return { success: false, message: 'Wipe failed.' };
     }
@@ -486,16 +481,21 @@ export async function clearAllMembers(): Promise<{ success: boolean; message: st
 
 export async function searchMembers(filters: SearchFilters, page = 1, pageSize = 20): Promise<SearchResult> {
   if (db) {
-    let whereClauses = [];
+    const activeId = await getActiveDatasetId();
+    if (!activeId) return { members: [], total: 0, page: 1, pageSize: 20, totalPages: 0 };
+
+    let whereClauses = [eq(dbMembers.datasetId, activeId)];
+    
     if (filters.query) {
       const q = `%${filters.query}%`;
-      whereClauses.push(or(
+      const searchFilter = or(
         ilike(dbMembers.memberNumber, q),
         ilike(dbMembers.firstName, q),
         ilike(dbMembers.lastName, q),
         ilike(dbMembers.email, q),
         ilike(dbMembers.schoolName, q)
-      ));
+      );
+      if (searchFilter) whereClauses.push(searchFilter);
     }
     if (filters.status && filters.status !== 'all') {
       const now = new Date();
@@ -506,7 +506,7 @@ export async function searchMembers(filters: SearchFilters, page = 1, pageSize =
     if (filters.school) whereClauses.push(eq(dbMembers.schoolName, filters.school));
     if (filters.membershipLevel) whereClauses.push(eq(dbMembers.membershipLevel, filters.membershipLevel));
 
-    const finalWhere = whereClauses.length > 0 ? and(...whereClauses) : undefined;
+    const finalWhere = and(...whereClauses);
     const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers).where(finalWhere);
     const total = Number(totalCount.count);
 
@@ -527,9 +527,13 @@ export async function getFilterOptions(): Promise<{
   membershipLevels: string[];
 }> {
   if (db) {
-    const regions = await db.select({ val: dbMembers.region }).from(dbMembers).groupBy(dbMembers.region);
-    const schools = await db.select({ val: dbMembers.schoolName }).from(dbMembers).groupBy(dbMembers.schoolName);
-    const levels = await db.select({ val: dbMembers.membershipLevel }).from(dbMembers).groupBy(dbMembers.membershipLevel);
+    const activeId = await getActiveDatasetId();
+    if (!activeId) return { regions: [], schools: [], membershipLevels: [] };
+
+    const regions = await db.select({ val: dbMembers.region }).from(dbMembers).where(eq(dbMembers.datasetId, activeId)).groupBy(dbMembers.region);
+    const schools = await db.select({ val: dbMembers.schoolName }).from(dbMembers).where(eq(dbMembers.datasetId, activeId)).groupBy(dbMembers.schoolName);
+    const levels = await db.select({ val: dbMembers.membershipLevel }).from(dbMembers).where(eq(dbMembers.datasetId, activeId)).groupBy(dbMembers.membershipLevel);
+    
     return {
       regions: regions.map(r => r.val).filter(Boolean).sort() as string[],
       schools: schools.map(s => s.val).filter(Boolean).sort() as string[],
@@ -543,14 +547,20 @@ export async function getFilterOptions(): Promise<{
 
 export async function getAnalytics(): Promise<AnalyticsData> {
   if (db) {
+    const activeId = await getActiveDatasetId();
+    if (!activeId) return { totalMembers: 0, activeMembers: 0, expiredMembers: 0, expiringSoon: 0, membersByRegion: [], membersBySchool: [], membersByLevel: [], membersByStatus: [] };
+
     const now = new Date();
     const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-    const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers);
-    const [activeCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers).where(sql`${dbMembers.expiryDate} > ${now}`);
-    const [expiringSoonCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers).where(and(sql`${dbMembers.expiryDate} > ${now}`, sql`${dbMembers.expiryDate} <= ${thirtyDaysFromNow}`));
-    const regionStats = await db.select({ region: dbMembers.region, count: sql<number>`count(*)` }).from(dbMembers).groupBy(dbMembers.region).orderBy(sql`count(*) DESC`).limit(10);
-    const schoolStats = await db.select({ school: dbMembers.schoolName, count: sql<number>`count(*)` }).from(dbMembers).groupBy(dbMembers.schoolName).orderBy(sql`count(*) DESC`).limit(10);
-    const levelStats = await db.select({ level: dbMembers.membershipLevel, count: sql<number>`count(*)` }).from(dbMembers).groupBy(dbMembers.membershipLevel);
+    const activeWhere = eq(dbMembers.datasetId, activeId);
+
+    const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers).where(activeWhere);
+    const [activeCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers).where(and(activeWhere, sql`${dbMembers.expiryDate} > ${now}`));
+    const [expiringSoonCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers).where(and(activeWhere, sql`${dbMembers.expiryDate} > ${now}`, sql`${dbMembers.expiryDate} <= ${thirtyDaysFromNow}`));
+    
+    const regionStats = await db.select({ region: dbMembers.region, count: sql<number>`count(*)` }).from(dbMembers).where(activeWhere).groupBy(dbMembers.region).orderBy(sql`count(*) DESC`).limit(10);
+    const schoolStats = await db.select({ school: dbMembers.schoolName, count: sql<number>`count(*)` }).from(dbMembers).where(activeWhere).groupBy(dbMembers.schoolName).orderBy(sql`count(*) DESC`).limit(10);
+    const levelStats = await db.select({ level: dbMembers.membershipLevel, count: sql<number>`count(*)` }).from(dbMembers).where(activeWhere).groupBy(dbMembers.membershipLevel);
 
     const total = Number(totalCount.count);
     const active = Number(activeCount.count);
@@ -578,7 +588,9 @@ export async function exportMembersToCsv(filters?: SearchFilters): Promise<strin
 
 export async function getMembersCount(): Promise<number> {
   if (db) {
-      const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers);
+      const activeId = await getActiveDatasetId();
+      if (!activeId) return 0;
+      const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers).where(eq(dbMembers.datasetId, activeId));
       return Number(totalCount.count);
   }
   return 0;
@@ -586,7 +598,9 @@ export async function getMembersCount(): Promise<number> {
 
 export async function getAllMembersList(): Promise<InMemoryMember[]> {
   if (db) {
-      const dbResults = await db.select().from(dbMembers);
+      const activeId = await getActiveDatasetId();
+      if (!activeId) return [];
+      const dbResults = await db.select().from(dbMembers).where(eq(dbMembers.datasetId, activeId));
       return dbResults.map(mapDbToMember);
   }
   return [];

@@ -10,6 +10,9 @@ export const members = pgTable('members', {
   email: varchar('email', { length: 255 }),
   homeNumber: varchar('home_number', { length: 50 }),
   
+  // Link to the dataset it came from
+  datasetId: integer('dataset_id').references(() => datasets.id, { onDelete: 'cascade' }),
+  
   // Membership details
   membershipLevel: varchar('membership_level', { length: 100 }),
   ieeeStatus: varchar('ieee_status', { length: 100 }),
