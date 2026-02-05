@@ -1,3 +1,5 @@
+'use client';
+
 import { ValidatorClient } from '@/components/ValidatorClient';
 import { BarChart, CheckSquare, Users } from 'lucide-react';
 
