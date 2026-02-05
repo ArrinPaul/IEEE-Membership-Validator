@@ -10,10 +10,10 @@ export default function VolunteerPage() {
   const { user } = useUser();
 
   return (
-    <div className="container mx-auto py-12 sm:py-16">
+    <div className="container px-4 mx-auto py-10 sm:py-16">
       <div className="w-full text-center mb-12">
         <Badge variant="outline" className="mb-4">Volunteer Portal</Badge>
-        <h1 className="text-4xl font-bold tracking-tight text-primary sm:text-5xl font-headline">
+        <h1 className="text-3xl font-bold tracking-tight text-primary sm:text-5xl font-headline">
           Welcome, {user?.firstName || 'Volunteer'}!
         </h1>
         <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">

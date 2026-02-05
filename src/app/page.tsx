@@ -6,22 +6,22 @@ import { BarChart, CheckSquare, Users } from 'lucide-react';
 export default function Home() {
   return (
     <>
-      <section className="py-12 sm:py-24">
-        <div className="container mx-auto text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-primary sm:text-5xl lg:text-6xl font-headline">
+      <section className="py-10 sm:py-20 md:py-32 lg:py-40">
+        <div className="container px-4 mx-auto text-center">
+          <h1 className="text-3xl font-bold tracking-tight text-primary sm:text-5xl md:text-6xl lg:text-7xl font-headline">
             IEEE Membership Validation Portal
           </h1>
-          <p className="mt-6 max-w-2xl mx-auto text-lg text-muted-foreground sm:text-xl">
+          <p className="mt-4 sm:mt-6 max-w-2xl mx-auto text-base sm:text-lg md:text-xl text-muted-foreground">
             Quickly and easily verify the status of IEEE memberships for your students and faculty.
             Ensure only active members access exclusive resources and events.
           </p>
         </div>
       </section>
 
-      <section className="pb-12 sm:pb-24">
-        <div className="container mx-auto">
+      <section className="pb-16 sm:pb-24 lg:pb-32">
+        <div className="container px-4 mx-auto">
           <div className="flex flex-col items-center justify-center">
-            <div className="w-full max-w-md">
+            <div className="w-full max-w-lg">
               <ValidatorClient />
             </div>
           </div>

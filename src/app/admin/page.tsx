@@ -11,7 +11,7 @@ import { BarChart3, Search, Upload, Users, UserSearch } from 'lucide-react';
 
 export default function AdminPage() {
   return (
-    <div className="container mx-auto py-12 sm:py-16">
+    <div className="container px-4 mx-auto py-10 sm:py-16">
       <div className="w-full text-center mb-12">
         <Badge variant="outline" className="mb-4">Admin Portal</Badge>
         <h1 className="text-4xl font-bold tracking-tight text-primary sm:text-5xl font-headline">
