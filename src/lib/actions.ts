@@ -257,6 +257,8 @@ export async function validateMembership(
       name: member.name,
       expiryDate: member.expiryDate,
       membershipLevel: member.membershipLevel,
+      region: member.region,
+      schoolName: member.schoolName,
     },
   };
 }

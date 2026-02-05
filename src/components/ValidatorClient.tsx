@@ -41,6 +41,8 @@ export function ValidatorClient() {
                   <div className="flex gap-2"><dt className="font-medium">Name:</dt><dd>{state.member.name}</dd></div>
                   <div className="flex gap-2"><dt className="font-medium">Status:</dt><dd className="font-semibold">{isActive ? 'Active' : 'Expired'}</dd></div>
                   <div className="flex gap-2"><dt className="font-medium">Expires on:</dt><dd>{new Date(state.member.expiryDate).toLocaleDateString()}</dd></div>
+                  {state.member.region && <div className="flex gap-2"><dt className="font-medium">Region:</dt><dd>{state.member.region}</dd></div>}
+                  {state.member.schoolName && <div className="flex gap-2"><dt className="font-medium">School:</dt><dd>{state.member.schoolName}</dd></div>}
                 </dl>
               </div>
             </div>
