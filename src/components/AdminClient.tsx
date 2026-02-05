@@ -24,7 +24,7 @@ function SubmitButton() {
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string | undefined }) {
+function DetailRow({ label, value }: { label: string; value: string | null | undefined }) {
     if (!value) return null;
     return (
         <div className="flex items-start justify-between py-2">
@@ -41,12 +41,12 @@ export function AdminClient() {
     switch (state.status) {
       case 'found':
         if (!state.member) return null;
-        const isActive = new Date(state.member.expiryDate) > new Date();
+        const isActive = state.member.expiryDate && new Date(state.member.expiryDate) > new Date();
         return (
           <Card className="mt-6 shadow-md">
             <CardHeader className="flex-row items-center justify-between">
               <div>
-                <CardTitle className="font-headline">{state.member.name}</CardTitle>
+                <CardTitle className="font-headline">{state.member.firstName} {state.member.lastName}</CardTitle>
                 <CardDescription>Membership ID: {state.member.id}</CardDescription>
               </div>
               <Badge variant={isActive ? 'default' : 'destructive'} className={isActive ? 'bg-green-600 text-white' : ''}>
@@ -59,11 +59,11 @@ export function AdminClient() {
                     <DetailRow label="First Name" value={state.member.firstName} />
                     <DetailRow label="Middle Name" value={state.member.middleName} />
                     <DetailRow label="Last Name" value={state.member.lastName} />
-                    <DetailRow label="Email Address" value={state.member.emailAddress} />
+                    <DetailRow label="Email Address" value={state.member.email} />
                     <DetailRow label="Contact Number" value={state.member.homeNumber} />
                     <Separator />
                     <DetailRow label="Membership Level" value={state.member.membershipLevel} />
-                    <DetailRow label="Expiry Date" value={new Date(state.member.expiryDate).toLocaleDateString()} />
+                    <DetailRow label="Expiry Date" value={state.member.expiryDate ? new Date(state.member.expiryDate).toLocaleDateString() : undefined} />
                     <DetailRow label="Renew Year" value={state.member.renewYear} />
                     <Separator />
                     <DetailRow label="Region" value={state.member.region} />

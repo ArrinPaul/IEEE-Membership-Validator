@@ -17,7 +17,7 @@ function SubmitButton() {
   return (
     <Button type="submit" className="w-full" disabled={pending}>
       {pending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-      Upload CSV
+      Upload File
     </Button>
   );
 }
@@ -79,8 +79,10 @@ export function CsvUploader() {
         <div className="mt-6 min-h-[240px] transition-opacity duration-300">
             {renderResult()}
         </div>
-        <div className="mt-4 text-xs text-muted-foreground">
-          <p><strong>Note:</strong> For now, only <strong>.csv</strong> files are processed correctly. The file must contain all required headers, such as <code>Member Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Email Address</code>, <code>IEEE Status</code>, and <code>Renew Year</code>. The column order does not matter.</p>
+        <div className="mt-4 text-xs text-muted-foreground space-y-2">
+          <p><strong>Supported formats:</strong> CSV (.csv) and Excel (.xlsx, .xls)</p>
+          <p><strong>Required headers:</strong> <code>Member Number</code>, <code>First Name</code>, <code>Last Name</code>, <code>Email Address</code>, <code>IEEE Status</code>, <code>Renew Year</code>, <code>Region</code>, <code>Section</code>, <code>School Name</code>, etc.</p>
+          <p className="text-muted-foreground/70">Column order does not matter as long as all required headers are present.</p>
         </div>
       </CardContent>
     </Card>
