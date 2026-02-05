@@ -48,7 +48,7 @@ export async function validateMembership(
   const member = members.find((m) => m.id === membershipId);
 
   if (!member) {
-    return { status: 'invalid', message: 'Membership ID not found.' };
+    return { status: 'invalid', message: `Membership ID not found. Searched for '${membershipId}' in a list of ${members.length} members. The first ID in memory is '${members[0]?.id || 'none'}'.` };
   }
 
   return {
@@ -81,7 +81,7 @@ export async function getAdminMemberDetails(
     const member = members.find((m) => m.id === membershipId);
 
     if (!member) {
-        return { status: 'not_found', message: 'Membership ID not found.' };
+        return { status: 'not_found', message: `Membership ID not found. Searched for '${membershipId}' in a list of ${members.length} members. The first ID in memory is '${members[0]?.id || 'none'}'.` };
     }
 
     return {
@@ -100,19 +100,28 @@ export async function uploadMembersCsv(
     return { status: 'error', message: 'Please select a file to upload.' };
   }
 
-  // The try/catch block will handle non-text files.
   try {
     const text = await file.text();
-    // Split by newline, supporting both Windows (\r\n) and Unix (\n)
     const lines = text.split(/\r?\n/).filter(line => line.trim() !== '');
     if (lines.length <= 1) {
       return { status: 'error', message: 'The file is empty or contains only a header.' };
     }
     
     const firstLine = lines[0];
-    // Handle potential UTF-8 BOM character at the start of the file
     const headersRaw = firstLine.charCodeAt(0) === 0xFEFF ? firstLine.substring(1) : firstLine;
-    const csvHeaders = headersRaw.split(',').map(h => h.trim());
+    
+    const cleanCsvValue = (v: string) => {
+        let value = v.trim();
+        if (value.startsWith('="') && value.endsWith('"')) {
+            return value.substring(2, value.length - 1);
+        }
+        if (value.startsWith('"') && value.endsWith('"')) {
+            return value.substring(1, value.length - 1);
+        }
+        return value;
+    };
+    
+    const csvHeaders = headersRaw.split(',').map(cleanCsvValue);
     
     const expectedHeaders = [
         'Region', 'Section', 'School Section', 'School Name', 'Member Number', 
@@ -130,7 +139,7 @@ export async function uploadMembersCsv(
 
     const newMembers: Member[] = [];
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim());
+      const values = lines[i].split(',').map(cleanCsvValue);
       const renewYear = values[headerMap['Renew Year']];
       
       const member: Member = {
@@ -160,13 +169,12 @@ export async function uploadMembersCsv(
       newMembers.push(member);
     }
 
-    // Replace the in-memory member list with the content of the file.
-    members.length = 0; // Clear the existing array
-    members.push(...newMembers); // Add all new members
+    members.length = 0;
+    members.push(...newMembers);
 
     return {
       status: 'success',
-      message: `Successfully loaded ${newMembers.length} members. The validator will now use only this data.`,
+      message: `Successfully loaded ${newMembers.length} members. The validator will now use only this data. First member ID parsed: '${newMembers[0]?.id || 'none'}'`,
       membersAdded: newMembers.length
     };
   } catch (e) {
