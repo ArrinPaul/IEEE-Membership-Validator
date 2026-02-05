@@ -123,21 +123,34 @@ src/
 
 ## CSV/Excel File Format
 
-Your member data file must include these headers:
+Your member data file (.csv, .xlsx, or .xls) must include the following headers (column order does not matter):
 
-| Header | Required | Description |
-|--------|----------|-------------|
-| Member Number | ✅ | Unique IEEE member ID |
-| First Name | ✅ | Member's first name |
-| Last Name | ✅ | Member's last name |
-| Email Address | ✅ | Contact email |
-| IEEE Status | ✅ | Membership level |
-| Renew Year | ✅ | Year of last renewal |
-| Region | ❌ | IEEE region |
-| Section | ❌ | IEEE section |
-| School Name | ❌ | School/Institution |
-| Home Number | ❌ | Contact phone |
-| ... | ❌ | Additional fields supported |
+| Header Name | Required | Description |
+|:---|:---:|:---|
+| **Member Number** | ✅ | Unique IEEE member identification number |
+| **First Name** | ✅ | Member's first name |
+| **Last Name** | ✅ | Member's last name |
+| **Email Address** | ✅ | Member's contact email address |
+| **IEEE Status** | ✅ | Membership grade (e.g., Student Member, Member) |
+| **Renew Year** | ✅ | The year the membership was last renewed |
+| **Region** | ✅ | IEEE Region (e.g., Region 10) |
+| **Section** | ✅ | IEEE Section |
+| **School Name** | ✅ | University or institution name |
+| **School Section** | ✅ | Specific school section within the university |
+| **Middle Name** | ✅ | Member's middle name (can be empty) |
+| **Grade** | ✅ | Current grade or level |
+| **Gender** | ✅ | Member's gender |
+| **Active Society List** | ✅ | List of IEEE Societies the member is part of |
+| **Technical Community List** | ✅ | List of technical communities |
+| **Technical Council List** | ✅ | List of technical councils |
+| **Special Interest Group List** | ✅ | List of special interest groups (e.g., SIGHT) |
+
+### Optional Fields
+The following fields are no longer required and can be omitted or left blank:
+- `School Number`
+- `Home Number`
+
+> **Note:** The application uses the `Renew Year` to automatically calculate the membership expiry date (set to February 27th of the following year).
 
 ## Setting Up Roles in Clerk
 
