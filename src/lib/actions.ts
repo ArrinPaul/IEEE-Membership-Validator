@@ -42,9 +42,11 @@ export async function validateMembership(
   });
 
   if (!validatedFields.success) {
+    const firstId = members[0]?.id || 'none';
+    const message = `Membership ID not found. Searched for '${formData.get('membershipId')}' in a list of ${members.length} members. The first ID in memory is '${firstId}'.`;
     return {
       status: 'error',
-      message: validatedFields.error.flatten().fieldErrors.membershipId?.[0] || 'Invalid input.',
+      message: validatedFields.error.flatten().fieldErrors.membershipId?.[0] || message,
     };
   }
   
@@ -52,7 +54,8 @@ export async function validateMembership(
   const member = members.find((m) => m.id === membershipId);
 
   if (!member) {
-    return { status: 'invalid', message: `Membership ID not found.` };
+    const firstId = members[0]?.id || 'none';
+    return { status: 'invalid', message: `Membership ID not found. Searched for '${membershipId}' in a list of ${members.length} members. The first ID in memory is '${firstId}'.` };
   }
 
   return {
@@ -121,19 +124,35 @@ export async function uploadMembersCsv(
     const firstLine = lines[0];
     const headersRaw = firstLine.charCodeAt(0) === 0xFEFF ? firstLine.substring(1) : firstLine;
     
-    // More robust value cleaning
     const cleanCsvValue = (v: string) => {
         let value = v.trim();
-        // Remove surrounding quotes if they exist
-        if (value.startsWith('"') && value.endsWith('"')) {
-            value = value.substring(1, value.length - 1);
-        }
         // Handle Excel's "=""...""" format
         if (value.startsWith('="') && value.endsWith('"')) {
             value = value.substring(2, value.length - 1);
         }
+        // Remove surrounding quotes if they exist
+        if (value.startsWith('"') && value.endsWith('"')) {
+            value = value.substring(1, value.length - 1);
+        }
         // Replace double double-quotes with a single double-quote
-        return value.replace(/""/g, '"').trim();
+        value = value.replace(/""/g, '"').trim();
+
+        // Convert scientific notation to a plain string representation
+        if (/^\d+(\.\d+)?e\+\d+$/i.test(value)) {
+            const num = Number(value);
+            if (!isNaN(num)) {
+                // Use BigInt to handle large numbers and avoid floating point inaccuracies
+                // then convert back to string.
+                try {
+                    return BigInt(num).toString();
+                } catch (e) {
+                    // fallback for safety, though unlikely for phone numbers
+                    return String(num);
+                }
+            }
+        }
+    
+        return value;
     };
     
     const csvHeaders = headersRaw.split(',').map(h => cleanCsvValue(h));
