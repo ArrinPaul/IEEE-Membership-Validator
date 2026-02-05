@@ -25,4 +25,16 @@ export type Member = {
   specialInterestGroupList?: string;
 };
 
-export let members: Member[] = [];
+// This is a common pattern to persist data across serverless function
+// invocations or hot-reloads in development. In a production environment,
+// a proper database would be a more robust solution.
+declare global {
+  // eslint-disable-next-line no-var
+  var __members: Member[];
+}
+
+if (!global.__members) {
+  global.__members = [];
+}
+
+export let members: Member[] = global.__members;
