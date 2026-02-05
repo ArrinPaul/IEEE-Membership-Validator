@@ -1,4 +1,4 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { clerkMiddleware, createRouteMatcher, clerkClient } from '@clerk/nextjs/server';
 import { NextResponse } from 'next/server';
 
 // Define route matchers
@@ -34,8 +34,24 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(signInUrl);
   }
 
-  // Get user role from session claims (set in Clerk dashboard or via API)
-  const userRole = (sessionClaims?.metadata as { role?: string })?.role || 'volunteer';
+  // Get user role from session claims
+  let userRole = 
+    (sessionClaims?.metadata as { role?: string })?.role || 
+    (sessionClaims?.publicMetadata as { role?: string })?.role;
+
+  // Fallback: If role is missing and we're accessing a protected route, 
+  // fetch the full user object to be absolutely sure.
+  if (!userRole && (isAdminRoute(req) || isVolunteerRoute(req))) {
+    try {
+      const client = await clerkClient();
+      const user = await client.users.getUser(userId);
+      userRole = (user.publicMetadata?.role as string) || 'user';
+    } catch (e) {
+      userRole = 'user';
+    }
+  } else if (!userRole) {
+    userRole = 'user';
+  }
 
   // Admin routes - only accessible by admins
   if (isAdminRoute(req)) {

@@ -3,7 +3,7 @@
 import { useAuth, useUser } from '@clerk/nextjs';
 import { createContext, useContext, ReactNode, useMemo } from 'react';
 
-export type UserRole = 'admin' | 'volunteer' | 'public';
+export type UserRole = 'admin' | 'volunteer' | 'user' | 'public';
 
 interface RoleContextType {
   role: UserRole;
@@ -47,7 +47,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
     }
 
     // Get role from public metadata (set in Clerk dashboard or via API)
-    const role = (user.publicMetadata?.role as UserRole) || 'volunteer';
+    const role = (user.publicMetadata?.role as UserRole) || 'user';
     
     return {
       role,

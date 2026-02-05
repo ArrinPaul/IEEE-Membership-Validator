@@ -130,6 +130,7 @@ export function UserManagement() {
                           )}
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="user">User</SelectItem>
                           <SelectItem value="volunteer">Volunteer</SelectItem>
                           <SelectItem value="admin">Admin</SelectItem>
                         </SelectContent>

@@ -1,11 +1,12 @@
 'use server';
 
 import { z } from 'zod';
-import { members as inMemoryMembers, type Member as InMemoryMember } from '@/lib/members';
+import { members as inMemoryMembers } from '@/lib/members';
+import type { Member as InMemoryMember } from '@/lib/members';
 import * as XLSX from 'xlsx';
 
 // Re-export Member type for external use
-export type { InMemoryMember as Member };
+export type Member = InMemoryMember;
 
 // Types
 export type ValidationState = {
@@ -65,11 +66,13 @@ const MembershipSchema = z.object({
 
 // Helper function to check if membership is active
 function isActiveMembership(expiryDate: string): boolean {
+  if (!expiryDate) return false;
   return new Date(expiryDate) > new Date();
 }
 
 // Helper function to check if membership expires within 30 days
 function expiresSoon(expiryDate: string): boolean {
+  if (!expiryDate) return false;
   const expiry = new Date(expiryDate);
   const now = new Date();
   const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
@@ -78,7 +81,8 @@ function expiresSoon(expiryDate: string): boolean {
 
 // Clean CSV value helper
 function cleanCsvValue(v: string): string {
-  let value = v.trim();
+  if (v === undefined || v === null) return '';
+  let value = String(v).trim();
   if (value.startsWith('="') && value.endsWith('"')) {
     value = value.substring(2, value.length - 1);
   }
@@ -291,7 +295,7 @@ export async function uploadMembersCsv(
     const expectedHeaders = [
       'Region', 'Section', 'School Section', 'School Name', 'Member Number', 
       'First Name', 'Middle Name', 'Last Name', 'Email Address', 'Grade', 'Gender',
-      'IEEE Status', 'Renew Year', 'School Number', 'Home Number', 
+      'IEEE Status', 'Renew Year', 
       'Active Society List', 'Technical Community List', 'Technical Council List', 'Special Interest Group List'
     ];
     

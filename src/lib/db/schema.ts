@@ -47,7 +47,7 @@ export const userRoles = pgTable('user_roles', {
   id: serial('id').primaryKey(),
   clerkUserId: varchar('clerk_user_id', { length: 255 }).notNull().unique(),
   email: varchar('email', { length: 255 }).notNull(),
-  role: varchar('role', { length: 50 }).notNull().default('volunteer'), // 'admin' | 'volunteer'
+  role: varchar('role', { length: 50 }).notNull().default('user'), // 'admin' | 'volunteer' | 'user'
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
 });
