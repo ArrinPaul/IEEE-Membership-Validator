@@ -33,6 +33,10 @@ export async function validateMembership(
 ): Promise<ValidationState> {
   await sleep(1000); 
 
+  if (members.length === 0) {
+    return { status: 'invalid', message: 'No member data has been uploaded. Please ask an admin to upload a dataset.' };
+  }
+
   const validatedFields = MembershipSchema.safeParse({
     membershipId: formData.get('membershipId')?.toString().trim(),
   });
@@ -48,7 +52,7 @@ export async function validateMembership(
   const member = members.find((m) => m.id === membershipId);
 
   if (!member) {
-    return { status: 'invalid', message: `Membership ID not found. Searched for '${membershipId}' in a list of ${members.length} members. The first ID in memory is '${members[0]?.id || 'none'}'.` };
+    return { status: 'invalid', message: `Membership ID not found.` };
   }
 
   return {
@@ -66,6 +70,11 @@ export async function getAdminMemberDetails(
   formData: FormData
 ): Promise<AdminSearchState> {
     await sleep(1000);
+
+    if (members.length === 0) {
+      return { status: 'not_found', message: 'No dataset uploaded. Please upload a member CSV file to begin.' };
+    }
+
     const validatedFields = MembershipSchema.safeParse({
         membershipId: formData.get('membershipId')?.toString().trim(),
     });
@@ -81,7 +90,7 @@ export async function getAdminMemberDetails(
     const member = members.find((m) => m.id === membershipId);
 
     if (!member) {
-        return { status: 'not_found', message: `Membership ID not found. Searched for '${membershipId}' in a list of ${members.length} members. The first ID in memory is '${members[0]?.id || 'none'}'.` };
+        return { status: 'not_found', message: `Membership ID not found.` };
     }
 
     return {
