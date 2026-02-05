@@ -1,3 +1,5 @@
+'use client';
+
 import { ValidatorClient } from '@/components/ValidatorClient';
 import { MemberSearch } from '@/components/MemberSearch';
 import { AdminClient } from '@/components/AdminClient';
