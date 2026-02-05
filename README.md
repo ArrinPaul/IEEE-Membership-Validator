@@ -1,199 +1,145 @@
 # IEEE Membership Validator
 
-A modern web application for validating and managing IEEE memberships. Built with Next.js 15, React 19, Clerk Authentication, and Tailwind CSS.
+A professional-grade web application designed for the validation and management of IEEE memberships. This system provides a streamlined interface for local chapters to verify member status, analyze chapter growth, and manage datasets efficiently.
 
 ![Next.js](https://img.shields.io/badge/Next.js-15-black)
 ![React](https://img.shields.io/badge/React-19-blue)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-3-teal)
 
-## Features
+## Core Capabilities
 
-### 🔐 Role-Based Access Control
-- **Public Users**: Can validate membership IDs on the home page
-- **Volunteers**: Access to enhanced validation features
-- **Admins**: Full access to analytics, user management, and data upload
+### Role-Based Access Control (RBAC)
+- **Public Access**: Secure validation of membership IDs via the public interface.
+- **Volunteer Access**: Enhanced verification tools for chapter operations.
+- **Administrative Access**: Comprehensive control over analytics, user permissions, and dataset management.
 
-### 📊 Analytics Dashboard
-- Total, active, and expired member counts
-- Members expiring within 30 days
-- Charts showing membership distribution by:
-  - Status (Active vs Expired)
-  - Membership Level
-  - School/Institution
-  - Region
+### Analytics and Reporting
+- Real-time tracking of active, expired, and total membership counts.
+- Proactive identification of memberships expiring within a 30-day window.
+- Visual data distribution across multiple dimensions:
+  - Membership Status
+  - Academic Grade/Level
+  - Institutional Affiliation
+  - Geographic Region
 
-### 🔍 Advanced Search & Filtering
-- Search by Member ID, Name, Email, or School
-- Filter by Status, Region, School, and Membership Level
-- Paginated results
-- Export search results to CSV
+### Data Management and Export
+- High-performance parsing of CSV and Excel (.xlsx, .xls) datasets.
+- Automated calculation of expiry dates based on institutional renewal cycles.
+- Advanced filtering and global search functionality.
+- Direct export of filtered results to CSV for external reporting.
 
-### 📁 Data Management
-- Upload member data via CSV or Excel (.xlsx, .xls)
-- Automatic expiry date calculation based on renewal year
-- Support for 19+ member data fields
+### Interface Standards
+- Full responsive support for mobile, tablet, and desktop environments.
+- Native system dark and light mode integration.
+- Standardized UI components based on Material Design principles.
 
-### 🎨 Modern UI/UX
-- Dark/Light mode toggle
-- Mobile-responsive design
-- Toast notifications
-- Loading states and animations
+## Technical Specification
 
-## Tech Stack
+- **Framework**: Next.js 15 (App Router)
+- **Language**: TypeScript (Strict Mode)
+- **UI Architecture**: Tailwind CSS + shadcn/ui
+- **Identity Provider**: Clerk Authentication
+- **Visualization**: Recharts
+- **Validation**: Zod + React Hook Form
+- **Data Processing**: XLSX Core
 
-- **Framework**: Next.js 15 with App Router
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS + shadcn/ui
-- **Authentication**: Clerk
-- **Charts**: Recharts
-- **Forms**: React Hook Form + Zod
-- **Excel Parsing**: xlsx library
+## System Requirements
 
-## Getting Started
+- Node.js 18.0 or higher
+- Package Manager (npm, yarn, or pnpm)
+- Clerk account for identity management
+- Neon Database account (Optional: Required for persistent audit logs)
 
-### Prerequisites
+## Implementation Guide
 
-- Node.js 18+ 
-- npm or yarn
-- Clerk account (for authentication)
-- Neon Database account (optional, for persistent storage)
-
-### Installation
-
-1. Clone the repository:
+### 1. Repository Setup
 ```bash
 git clone https://github.com/yourusername/ieee-membership-validator.git
 cd ieee-membership-validator
 ```
 
-2. Install dependencies:
+### 2. Dependency Management
 ```bash
 npm install
 ```
 
-3. Set up environment variables:
-```bash
-cp .env.example .env.local
-```
-
-4. Configure your environment variables in `.env.local`:
+### 3. Environment Configuration
+Create a `.env.local` file in the root directory:
 ```env
-# Clerk Authentication
+# Clerk Authentication Configuration
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
 CLERK_SECRET_KEY=sk_test_...
 
-# Optional: Neon Database
+# Database Configuration (Optional)
 DATABASE_URL=postgresql://...
 ```
 
-5. Run the development server:
+### 4. Development Execution
 ```bash
 npm run dev
 ```
+The application will be accessible at [http://localhost:9002](http://localhost:9002).
 
-6. Open [http://localhost:9002](http://localhost:9002)
+## Data Schema Specification
 
-## Project Structure
-
-```
-src/
-├── app/                    # Next.js App Router pages
-│   ├── admin/             # Admin dashboard
-│   ├── volunteer/         # Volunteer portal
-│   ├── sign-in/           # Clerk sign-in page
-│   ├── sign-up/           # Clerk sign-up page
-│   └── unauthorized/      # Access denied page
-├── components/
-│   ├── layout/            # Header, Footer components
-│   ├── providers/         # Auth, Theme providers
-│   ├── ui/                # shadcn/ui components
-│   ├── AdminClient.tsx    # Admin member lookup
-│   ├── AnalyticsDashboard.tsx
-│   ├── CsvUploader.tsx    # File upload component
-│   ├── MemberSearch.tsx   # Search & filter
-│   ├── UserManagement.tsx # Role management
-│   └── ValidatorClient.tsx # Public validation form
-├── lib/
-│   ├── auth/              # Authentication utilities
-│   ├── db/                # Database schema & connection
-│   └── actions.ts         # Server actions
-└── middleware.ts          # Route protection
-```
-
-## CSV/Excel File Format
-
-Your member data file (.csv, .xlsx, or .xls) must include the following headers (column order does not matter):
+The ingestion engine requires specific headers for membership datasets. Column order is flexible.
 
 | Header Name | Required | Description |
 |:---|:---:|:---|
-| **Member Number** | ✅ | Unique IEEE member identification number |
-| **First Name** | ✅ | Member's first name |
-| **Last Name** | ✅ | Member's last name |
-| **Email Address** | ✅ | Member's contact email address |
-| **IEEE Status** | ✅ | Membership grade (e.g., Student Member, Member) |
-| **Renew Year** | ✅ | The year the membership was last renewed |
-| **Region** | ✅ | IEEE Region (e.g., Region 10) |
-| **Section** | ✅ | IEEE Section |
-| **School Name** | ✅ | University or institution name |
-| **School Section** | ✅ | Specific school section within the university |
-| **Middle Name** | ✅ | Member's middle name (can be empty) |
-| **Grade** | ✅ | Current grade or level |
-| **Gender** | ✅ | Member's gender |
-| **Active Society List** | ✅ | List of IEEE Societies the member is part of |
-| **Technical Community List** | ✅ | List of technical communities |
-| **Technical Council List** | ✅ | List of technical councils |
-| **Special Interest Group List** | ✅ | List of special interest groups (e.g., SIGHT) |
+| **Member Number** | ✅ | Unique IEEE identification number |
+| **First Name** | ✅ | Member's given name |
+| **Last Name** | ✅ | Member's family name |
+| **Email Address** | ✅ | Primary contact email |
+| **IEEE Status** | ✅ | Current membership grade |
+| **Renew Year** | ✅ | Most recent renewal year |
+| **Region** | ✅ | Assigned IEEE region |
+| **Section** | ✅ | Local IEEE section |
+| **School Name** | ✅ | Affiliated institution |
+| **School Section** | ✅ | Institutional subunit |
+| **Middle Name** | ✅ | Additional names (optional value) |
+| **Grade** | ✅ | Academic or professional grade |
+| **Gender** | ✅ | Member gender |
+| **Active Society List** | ✅ | Affiliated IEEE societies |
+| **Technical Community List** | ✅ | Affiliated technical communities |
+| **Technical Council List** | ✅ | Affiliated technical councils |
+| **Special Interest Group List** | ✅ | Affiliated SIGs (e.g., SIGHT) |
 
-### Optional Fields
-The following fields are no longer required and can be omitted or left blank:
+### Non-Mandatory Fields
+The following fields are optional and do not impact system logic:
 - `School Number`
 - `Home Number`
 
-> **Note:** The application uses the `Renew Year` to automatically calculate the membership expiry date (set to February 27th of the following year).
+## Administrative Configuration
 
-## Setting Up Roles in Clerk
+To assign administrative or volunteer privileges:
+1. Access the Clerk Dashboard.
+2. Navigate to the **Users** directory.
+3. Select the target user profile.
+4. Update the **Public Metadata** with the following JSON:
+   - For Admin: `{ "role": "admin" }`
+   - For Volunteer: `{ "role": "volunteer" }`
 
-1. Go to your Clerk Dashboard
-2. Navigate to Users
-3. Select a user
-4. Click "Edit" on Public Metadata
-5. Add: `{ "role": "admin" }` or `{ "role": "volunteer" }`
+## Deployment Strategy
 
-## Deployment
+### Vercel Integration
+1. Connect the repository to a new Vercel project.
+2. Define the environment variables in the project settings.
+3. Execute the deployment build.
 
-### Vercel (Recommended)
+## Contributing Protocols
 
-1. Push your code to GitHub
-2. Import the project in Vercel
-3. Add environment variables
-4. Deploy!
-
-### Environment Variables for Production
-
-```env
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
-CLERK_SECRET_KEY=sk_live_...
-DATABASE_URL=postgresql://...
-NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
-NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
-```
-
-## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+1. Fork the repository.
+2. Create a feature branch (`git checkout -b feature/refinement`).
+3. Commit changes according to standard conventions.
+4. Submit a Pull Request for review.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Distributed under the MIT License. See `LICENSE` for further details.
 
 ## Acknowledgments
 
-- [IEEE](https://www.ieee.org/) - The world's largest technical professional organization
-- [shadcn/ui](https://ui.shadcn.com/) - Beautiful UI components
-- [Clerk](https://clerk.com/) - Authentication made simple
-- [Vercel](https://vercel.com/) - Deployment platform
+- **IEEE**: For their contributions to technical advancement.
+- **Clerk**: For secure and seamless authentication services.
+- **Vercel**: For high-performance hosting and deployment.

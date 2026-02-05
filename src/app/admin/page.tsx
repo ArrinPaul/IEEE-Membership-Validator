@@ -13,12 +13,13 @@ export default function AdminPage() {
   return (
     <div className="container px-4 mx-auto py-10 sm:py-16">
       <div className="w-full text-center mb-12">
-        <Badge variant="outline" className="mb-4">Admin Portal</Badge>
-        <h1 className="text-4xl font-bold tracking-tight text-primary sm:text-5xl font-headline">
-          Administration Dashboard
+        <Badge variant="outline" className="mb-4">Administrative Suite</Badge>
+        <h1 className="text-3xl font-bold tracking-tight text-primary sm:text-5xl font-headline">
+          Executive Dashboard
         </h1>
         <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">
-          Manage members, view analytics, upload data, and control user access.
+          Command center for chapter administration. Oversee membership analytics, manage data ecosystems, 
+          and govern user permissions with precision.
         </p>
       </div>
 
