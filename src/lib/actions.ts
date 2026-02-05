@@ -4,6 +4,10 @@ import { z } from 'zod';
 import { members as inMemoryMembers } from '@/lib/members';
 import type { Member as InMemoryMember } from '@/lib/members';
 import * as XLSX from 'xlsx';
+import { db, members as dbMembers, datasets as dbDatasets } from '@/lib/db';
+import { eq, or, ilike, sql, and, desc } from 'drizzle-orm';
+import { put } from '@vercel/blob';
+import { revalidatePath } from 'next/cache';
 
 // Re-export Member type for external use
 export type Member = InMemoryMember;
@@ -14,7 +18,6 @@ export type ValidationState = {
   member?: {
     name: string;
     expiryDate: string;
-    homeNumber?: string;
     membershipLevel?: string;
   };
   message?: string;
@@ -30,6 +33,7 @@ export type CsvUploadState = {
   status: 'idle' | 'success' | 'error';
   message?: string;
   membersAdded?: number;
+  datasetId?: number;
 };
 
 export type SearchFilters = {
@@ -59,19 +63,28 @@ export type AnalyticsData = {
   membersByStatus: { status: string; count: number }[];
 };
 
+export type DatasetInfo = {
+  id: number;
+  name: string;
+  url: string;
+  rowCount: number;
+  isActive: boolean;
+  createdAt: string;
+};
+
 // Validation schemas
 const MembershipSchema = z.object({
   membershipId: z.string().trim().min(1, 'Membership ID must not be empty.'),
 });
 
 // Helper function to check if membership is active
-function isActiveMembership(expiryDate: string): boolean {
+function isActiveMembership(expiryDate: string | Date | null): boolean {
   if (!expiryDate) return false;
   return new Date(expiryDate) > new Date();
 }
 
 // Helper function to check if membership expires within 30 days
-function expiresSoon(expiryDate: string): boolean {
+function expiresSoon(expiryDate: string | Date | null): boolean {
   if (!expiryDate) return false;
   const expiry = new Date(expiryDate);
   const now = new Date();
@@ -80,7 +93,7 @@ function expiresSoon(expiryDate: string): boolean {
 }
 
 // Clean CSV value helper
-function cleanCsvValue(v: string): string {
+function cleanCsvValue(v: any): string {
   if (v === undefined || v === null) return '';
   let value = String(v).trim();
   if (value.startsWith('="') && value.endsWith('"')) {
@@ -141,41 +154,64 @@ async function parseExcel(buffer: ArrayBuffer): Promise<{ headers: string[]; row
   return { headers, rows };
 }
 
-// Convert row data to member object
-function rowToMember(values: string[], headerMap: Record<string, number>): InMemoryMember {
+// Convert row data to member object for DB
+function rowToDbMember(values: string[], headerMap: Record<string, number>): any {
   const getValue = (key: string) => values[headerMap[key]] || '';
   const renewYearValue = getValue('Renew Year');
   
-  let expiryDate = new Date().toISOString().split('T')[0];
+  let expiryDate = new Date();
   if (renewYearValue && !isNaN(parseInt(renewYearValue))) {
     const expiryYear = parseInt(renewYearValue) + 1;
-    const expiry = new Date(expiryYear, 1, 27);
-    expiryDate = expiry.toISOString().split('T')[0];
+    expiryDate = new Date(expiryYear, 1, 27);
   }
 
   return {
-    id: getValue('Member Number'),
-    name: `${getValue('First Name')} ${getValue('Last Name')}`.trim(),
+    memberNumber: getValue('Member Number'),
+    firstName: getValue('First Name'),
+    middleName: getValue('Middle Name'),
+    lastName: getValue('Last Name'),
     email: getValue('Email Address'),
     membershipLevel: getValue('IEEE Status'),
-    expiryDate,
+    expiryDate: expiryDate,
     region: getValue('Region'),
     section: getValue('Section'),
     schoolSection: getValue('School Section'),
     schoolName: getValue('School Name'),
-    firstName: getValue('First Name'),
-    middleName: getValue('Middle Name'),
-    lastName: getValue('Last Name'),
-    emailAddress: getValue('Email Address'),
     grade: getValue('Grade'),
     gender: getValue('Gender'),
     renewYear: getValue('Renew Year'),
-    schoolNumber: getValue('School Number'),
-    homeNumber: getValue('Home Number'),
     activeSocietyList: getValue('Active Society List'),
     technicalCommunityList: getValue('Technical Community List'),
     technicalCouncilList: getValue('Technical Council List'),
     specialInterestGroupList: getValue('Special Interest Group List'),
+  };
+}
+
+// Map DB record to UI Member type
+function mapDbToMember(m: any): InMemoryMember {
+  return {
+    id: m.memberNumber,
+    name: `${m.firstName} ${m.lastName}`.trim(),
+    email: m.email || '',
+    membershipLevel: m.membershipLevel || '',
+    expiryDate: m.expiryDate?.toISOString() || new Date().toISOString(),
+    region: m.region || '',
+    section: m.section || '',
+    schoolSection: m.schoolSection || '',
+    schoolName: m.schoolName || '',
+    firstName: m.firstName,
+    middleName: m.middleName || '',
+    lastName: m.lastName,
+    emailAddress: m.email || '',
+    grade: m.grade || '',
+    gender: m.gender || '',
+    renewYear: m.renewYear || '',
+    schoolNumber: '', // Removed from DB but kept for type compatibility
+    homeNumber: '', // Removed from DB but kept for type compatibility
+    activeSocietyList: m.activeSocietyList || '',
+    technicalCommunityList: m.technicalCommunityList || '',
+    technicalCouncilList: m.technicalCouncilList || '',
+    specialInterestGroupList: m.specialInterestGroupList || '',
   };
 }
 
@@ -185,13 +221,6 @@ export async function validateMembership(
   prevState: ValidationState,
   formData: FormData
 ): Promise<ValidationState> {
-  if (inMemoryMembers.length === 0) {
-    return { 
-      status: 'invalid', 
-      message: 'No member data has been uploaded. Please ask an admin to upload a dataset.' 
-    };
-  }
-
   const validatedFields = MembershipSchema.safeParse({
     membershipId: formData.get('membershipId')?.toString().trim(),
   });
@@ -204,7 +233,16 @@ export async function validateMembership(
   }
   
   const { membershipId } = validatedFields.data;
-  const member = inMemoryMembers.find((m) => m.id === membershipId);
+  
+  let member;
+  if (db) {
+    const results = await db.select().from(dbMembers).where(eq(dbMembers.memberNumber, membershipId)).limit(1);
+    if (results.length > 0) {
+      member = mapDbToMember(results[0]);
+    }
+  } else {
+    member = inMemoryMembers.find((m) => m.id === membershipId);
+  }
 
   if (!member) {
     return { 
@@ -218,7 +256,6 @@ export async function validateMembership(
     member: {
       name: member.name,
       expiryDate: member.expiryDate,
-      homeNumber: member.homeNumber,
       membershipLevel: member.membershipLevel,
     },
   };
@@ -230,13 +267,6 @@ export async function getAdminMemberDetails(
   prevState: AdminSearchState,
   formData: FormData
 ): Promise<AdminSearchState> {
-  if (inMemoryMembers.length === 0) {
-    return { 
-      status: 'not_found', 
-      message: 'No dataset uploaded. Please upload a member CSV/Excel file to begin.' 
-    };
-  }
-
   const validatedFields = MembershipSchema.safeParse({
     membershipId: formData.get('membershipId')?.toString().trim(),
   });
@@ -249,7 +279,16 @@ export async function getAdminMemberDetails(
   }
   
   const { membershipId } = validatedFields.data;
-  const member = inMemoryMembers.find((m) => m.id === membershipId);
+  
+  let member;
+  if (db) {
+    const results = await db.select().from(dbMembers).where(eq(dbMembers.memberNumber, membershipId)).limit(1);
+    if (results.length > 0) {
+      member = mapDbToMember(results[0]);
+    }
+  } else {
+    member = inMemoryMembers.find((m) => m.id === membershipId);
+  }
 
   if (!member) {
     return { status: 'not_found', message: 'Membership ID not found.' };
@@ -271,25 +310,24 @@ export async function uploadMembersCsv(
   }
 
   try {
+    // 1. Upload to Vercel Blob for persistent storage
+    const blob = await put(file.name, file, { access: 'public' });
+    
+    // 2. Parse file locally to get data for initial activation
     let headers: string[];
     let rows: string[][];
-
+    const buffer = await file.arrayBuffer();
     const fileName = file.name.toLowerCase();
 
     if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-      const buffer = await file.arrayBuffer();
       const result = await parseExcel(buffer);
       headers = result.headers;
       rows = result.rows;
     } else {
-      const text = await file.text();
+      const text = new TextDecoder().decode(buffer);
       const result = parseCsv(text);
       headers = result.headers;
       rows = result.rows;
-    }
-
-    if (rows.length === 0) {
-      return { status: 'error', message: 'The file is empty or contains only a header.' };
     }
 
     const expectedHeaders = [
@@ -308,16 +346,44 @@ export async function uploadMembersCsv(
     }
 
     const headerMap = Object.fromEntries(headers.map((h, i) => [h, i]));
-    const newMembers: InMemoryMember[] = rows.map(row => rowToMember(row, headerMap));
+    const membersData = rows.map(row => rowToDbMember(row, headerMap));
 
-    inMemoryMembers.length = 0;
-    inMemoryMembers.push(...newMembers);
+    if (db) {
+      // 3. Save dataset metadata
+      const [dataset] = await db.insert(dbDatasets).values({
+        name: file.name,
+        url: blob.url,
+        rowCount: membersData.length,
+        isActive: true
+      }).returning();
 
-    return {
-      status: 'success',
-      message: `Successfully loaded ${newMembers.length} members from ${file.name}.`,
-      membersAdded: newMembers.length
-    };
+      // 4. Update all other datasets to NOT active
+      await db.update(dbDatasets).set({ isActive: false }).where(sql`id != ${dataset.id}`);
+
+      // 5. Populate members table
+      await db.delete(dbMembers);
+      const batchSize = 100;
+      for (let i = 0; i < membersData.length; i += batchSize) {
+        await db.insert(dbMembers).values(membersData.slice(i, i + batchSize));
+      }
+      
+      revalidatePath('/admin');
+      return {
+        status: 'success',
+        message: `Successfully uploaded ${file.name} to cloud storage and activated it.`,
+        membersAdded: membersData.length,
+        datasetId: dataset.id
+      };
+    } else {
+        // Fallback for local development without DB
+        inMemoryMembers.length = 0;
+        inMemoryMembers.push(...rows.map(row => mapDbToMember(rowToDbMember(row, headerMap))));
+        return {
+            status: 'success',
+            message: `Loaded ${rows.length} members into memory (No DB configured).`,
+            membersAdded: rows.length
+        };
+    }
   } catch (e) {
     const message = e instanceof Error ? e.message : 'An unknown error occurred.';
     return { 
@@ -327,54 +393,130 @@ export async function uploadMembersCsv(
   }
 }
 
+// ============ DATASET MANAGEMENT ============
+
+export async function getDatasets(): Promise<DatasetInfo[]> {
+  if (!db) return [];
+  const results = await db.select().from(dbDatasets).orderBy(desc(dbDatasets.createdAt));
+  return results.map(d => ({
+    id: d.id,
+    name: d.name,
+    url: d.url,
+    rowCount: d.rowCount || 0,
+    isActive: d.isActive || false,
+    createdAt: d.createdAt?.toISOString() || ''
+  }));
+}
+
+export async function activateDataset(datasetId: number): Promise<{ success: boolean; message: string }> {
+  if (!db) return { success: false, message: 'Database not configured.' };
+
+  try {
+    const [dataset] = await db.select().from(dbDatasets).where(eq(dbDatasets.id, datasetId)).limit(1);
+    if (!dataset) return { success: false, message: 'Dataset not found.' };
+
+    // 1. Fetch file from Vercel Blob
+    const response = await fetch(dataset.url);
+    const buffer = await response.arrayBuffer();
+    
+    // 2. Parse
+    let headers: string[];
+    let rows: string[][];
+    if (dataset.url.toLowerCase().endsWith('.xlsx') || dataset.url.toLowerCase().endsWith('.xls')) {
+      const result = await parseExcel(buffer);
+      headers = result.headers;
+      rows = result.rows;
+    } else {
+      const text = new TextDecoder().decode(buffer);
+      const result = parseCsv(text);
+      headers = result.headers;
+      rows = result.rows;
+    }
+
+    const headerMap = Object.fromEntries(headers.map((h, i) => [h, i]));
+    const membersData = rows.map(row => rowToDbMember(row, headerMap));
+
+    // 3. Update active status in DB
+    await db.update(dbDatasets).set({ isActive: false });
+    await db.update(dbDatasets).set({ isActive: true }).where(eq(dbDatasets.id, datasetId));
+
+    // 4. Update members table
+    await db.delete(dbMembers);
+    const batchSize = 100;
+    for (let i = 0; i < membersData.length; i += batchSize) {
+      await db.insert(dbMembers).values(membersData.slice(i, i + batchSize));
+    }
+
+    revalidatePath('/admin');
+    return { success: true, message: `Dataset "${dataset.name}" is now active.` };
+  } catch (e) {
+    return { success: false, message: e instanceof Error ? e.message : 'Activation failed.' };
+  }
+}
+
+export async function deleteDataset(datasetId: number): Promise<{ success: boolean; message: string }> {
+    if (!db) return { success: false, message: 'Database not configured.' };
+    // Implementation for deletion could be added here (including Blob deletion)
+    await db.delete(dbDatasets).where(eq(dbDatasets.id, datasetId));
+    revalidatePath('/admin');
+    return { success: true, message: 'Dataset record removed.' };
+}
+
 // ============ SEARCH & FILTER ACTIONS ============
 
 export async function searchMembers(filters: SearchFilters, page = 1, pageSize = 20): Promise<SearchResult> {
+  if (db) {
+    let whereClauses = [];
+    if (filters.query) {
+      const q = `%${filters.query}%`;
+      whereClauses.push(or(
+        ilike(dbMembers.memberNumber, q),
+        ilike(dbMembers.firstName, q),
+        ilike(dbMembers.lastName, q),
+        ilike(dbMembers.email, q),
+        ilike(dbMembers.schoolName, q)
+      ));
+    }
+    if (filters.status && filters.status !== 'all') {
+      const now = new Date();
+      if (filters.status === 'active') whereClauses.push(sql`${dbMembers.expiryDate} > ${now}`);
+      else whereClauses.push(sql`${dbMembers.expiryDate} <= ${now}`);
+    }
+    if (filters.region) whereClauses.push(eq(dbMembers.region, filters.region));
+    if (filters.school) whereClauses.push(eq(dbMembers.schoolName, filters.school));
+    if (filters.membershipLevel) whereClauses.push(eq(dbMembers.membershipLevel, filters.membershipLevel));
+
+    const finalWhere = whereClauses.length > 0 ? and(...whereClauses) : undefined;
+    const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers).where(finalWhere);
+    const total = Number(totalCount.count);
+
+    const results = await db.select().from(dbMembers).where(finalWhere).limit(pageSize).offset((page - 1) * pageSize);
+
+    return {
+      members: results.map(mapDbToMember),
+      total, page, pageSize,
+      totalPages: Math.ceil(total / pageSize),
+    };
+  }
+
+  // Fallback to in-memory
   let filtered = [...inMemoryMembers];
-
   if (filters.query) {
-    const query = filters.query.toLowerCase();
-    filtered = filtered.filter(m => 
-      m.id.toLowerCase().includes(query) ||
-      m.name.toLowerCase().includes(query) ||
-      m.email?.toLowerCase().includes(query) ||
-      m.emailAddress?.toLowerCase().includes(query) ||
-      m.firstName?.toLowerCase().includes(query) ||
-      m.lastName?.toLowerCase().includes(query) ||
-      m.schoolName?.toLowerCase().includes(query)
-    );
+    const q = filters.query.toLowerCase();
+    filtered = filtered.filter(m => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q) || m.email?.toLowerCase().includes(q));
   }
-
   if (filters.status && filters.status !== 'all') {
-    filtered = filtered.filter(m => {
-      const isActive = isActiveMembership(m.expiryDate);
-      return filters.status === 'active' ? isActive : !isActive;
-    });
+    filtered = filtered.filter(m => filters.status === 'active' ? isActiveMembership(m.expiryDate) : !isActiveMembership(m.expiryDate));
   }
-
-  if (filters.region) {
-    filtered = filtered.filter(m => m.region === filters.region);
-  }
-
-  if (filters.school) {
-    filtered = filtered.filter(m => m.schoolName === filters.school);
-  }
-
-  if (filters.membershipLevel) {
-    filtered = filtered.filter(m => m.membershipLevel === filters.membershipLevel);
-  }
+  if (filters.region) filtered = filtered.filter(m => m.region === filters.region);
+  if (filters.school) filtered = filtered.filter(m => m.schoolName === filters.school);
+  if (filters.membershipLevel) filtered = filtered.filter(m => m.membershipLevel === filters.membershipLevel);
 
   const total = filtered.length;
-  const totalPages = Math.ceil(total / pageSize);
-  const startIndex = (page - 1) * pageSize;
-  const paginatedMembers = filtered.slice(startIndex, startIndex + pageSize);
-
   return {
-    members: paginatedMembers,
-    total,
-    page,
-    pageSize,
-    totalPages,
+    members: filtered.slice((page - 1) * pageSize, page * pageSize),
+    total, page, pageSize,
+    totalPages: Math.ceil(total / pageSize),
   };
 }
 
@@ -383,131 +525,76 @@ export async function getFilterOptions(): Promise<{
   schools: string[];
   membershipLevels: string[];
 }> {
-  const regions = [...new Set(inMemoryMembers.map(m => m.region).filter(Boolean))].sort() as string[];
-  const schools = [...new Set(inMemoryMembers.map(m => m.schoolName).filter(Boolean))].sort() as string[];
-  const membershipLevels = [...new Set(inMemoryMembers.map(m => m.membershipLevel).filter(Boolean))].sort() as string[];
-
-  return { regions, schools, membershipLevels };
+  if (db) {
+    const regions = await db.select({ val: dbMembers.region }).from(dbMembers).groupBy(dbMembers.region);
+    const schools = await db.select({ val: dbMembers.schoolName }).from(dbMembers).groupBy(dbMembers.schoolName);
+    const levels = await db.select({ val: dbMembers.membershipLevel }).from(dbMembers).groupBy(dbMembers.membershipLevel);
+    return {
+      regions: regions.map(r => r.val).filter(Boolean).sort() as string[],
+      schools: schools.map(s => s.val).filter(Boolean).sort() as string[],
+      membershipLevels: levels.map(l => l.val).filter(Boolean).sort() as string[],
+    };
+  }
+  return {
+    regions: [...new Set(inMemoryMembers.map(m => m.region).filter(Boolean))].sort() as string[],
+    schools: [...new Set(inMemoryMembers.map(m => m.schoolName).filter(Boolean))].sort() as string[],
+    membershipLevels: [...new Set(inMemoryMembers.map(m => m.membershipLevel).filter(Boolean))].sort() as string[],
+  };
 }
 
 // ============ ANALYTICS ACTIONS ============
 
 export async function getAnalytics(): Promise<AnalyticsData> {
+  if (db) {
+    const now = new Date();
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers);
+    const [activeCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers).where(sql`${dbMembers.expiryDate} > ${now}`);
+    const [expiringSoonCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers).where(and(sql`${dbMembers.expiryDate} > ${now}`, sql`${dbMembers.expiryDate} <= ${thirtyDaysFromNow}`));
+    const regionStats = await db.select({ region: dbMembers.region, count: sql<number>`count(*)` }).from(dbMembers).groupBy(dbMembers.region).orderBy(sql`count(*) DESC`).limit(10);
+    const schoolStats = await db.select({ school: dbMembers.schoolName, count: sql<number>`count(*)` }).from(dbMembers).groupBy(dbMembers.schoolName).orderBy(sql`count(*) DESC`).limit(10);
+    const levelStats = await db.select({ level: dbMembers.membershipLevel, count: sql<number>`count(*)` }).from(dbMembers).groupBy(dbMembers.membershipLevel);
+
+    const total = Number(totalCount.count);
+    const active = Number(activeCount.count);
+    return {
+        totalMembers: total, activeMembers: active, expiredMembers: total - active, expiringSoon: Number(expiringSoonCount.count),
+        membersByRegion: regionStats.map(r => ({ region: r.region || 'Unknown', count: Number(r.count) })),
+        membersBySchool: schoolStats.map(s => ({ school: s.school || 'Unknown', count: Number(s.count) })),
+        membersByLevel: levelStats.map(l => ({ level: l.level || 'Unknown', count: Number(l.count) })),
+        membersByStatus: [{ status: 'Active', count: active }, { status: 'Expired', count: total - active }],
+    };
+  }
   const activeMembers = inMemoryMembers.filter(m => isActiveMembership(m.expiryDate));
-  const expiredMembers = inMemoryMembers.filter(m => !isActiveMembership(m.expiryDate));
-  const expiringSoonList = inMemoryMembers.filter(m => expiresSoon(m.expiryDate));
-
-  const regionCounts = inMemoryMembers.reduce((acc, m) => {
-    const region = m.region || 'Unknown';
-    acc[region] = (acc[region] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const schoolCounts = inMemoryMembers.reduce((acc, m) => {
-    const school = m.schoolName || 'Unknown';
-    acc[school] = (acc[school] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const levelCounts = inMemoryMembers.reduce((acc, m) => {
-    const level = m.membershipLevel || 'Unknown';
-    acc[level] = (acc[level] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
   return {
-    totalMembers: inMemoryMembers.length,
-    activeMembers: activeMembers.length,
-    expiredMembers: expiredMembers.length,
-    expiringSoon: expiringSoonList.length,
-    membersByRegion: Object.entries(regionCounts)
-      .map(([region, count]) => ({ region, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10),
-    membersBySchool: Object.entries(schoolCounts)
-      .map(([school, count]) => ({ school, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10),
-    membersByLevel: Object.entries(levelCounts)
-      .map(([level, count]) => ({ level, count }))
-      .sort((a, b) => b.count - a.count),
-    membersByStatus: [
-      { status: 'Active', count: activeMembers.length },
-      { status: 'Expired', count: expiredMembers.length },
-    ],
+    totalMembers: inMemoryMembers.length, activeMembers: activeMembers.length, expiredMembers: inMemoryMembers.length - activeMembers.length, expiringSoon: inMemoryMembers.filter(m => expiresSoon(m.expiryDate)).length,
+    membersByRegion: [], membersBySchool: [], membersByLevel: [], membersByStatus: [],
   };
 }
 
 // ============ EXPORT ACTIONS ============
 
 export async function exportMembersToCsv(filters?: SearchFilters): Promise<string> {
-  let membersToExport = [...inMemoryMembers];
-
-  if (filters) {
-    if (filters.query) {
-      const query = filters.query.toLowerCase();
-      membersToExport = membersToExport.filter(m => 
-        m.id.toLowerCase().includes(query) ||
-        m.name.toLowerCase().includes(query) ||
-        m.email?.toLowerCase().includes(query)
-      );
-    }
-
-    if (filters.status && filters.status !== 'all') {
-      membersToExport = membersToExport.filter(m => {
-        const isActive = isActiveMembership(m.expiryDate);
-        return filters.status === 'active' ? isActive : !isActive;
-      });
-    }
-
-    if (filters.region) {
-      membersToExport = membersToExport.filter(m => m.region === filters.region);
-    }
-
-    if (filters.school) {
-      membersToExport = membersToExport.filter(m => m.schoolName === filters.school);
-    }
-  }
-
-  const headers = [
-    'Member Number', 'First Name', 'Middle Name', 'Last Name', 'Email Address',
-    'Home Number', 'IEEE Status', 'Expiry Date', 'Status',
-    'Region', 'Section', 'School Section', 'School Name', 'School Number',
-    'Grade', 'Gender', 'Renew Year',
-    'Active Society List', 'Technical Community List', 'Technical Council List', 'Special Interest Group List'
-  ];
-
+  const { members: membersToExport } = await searchMembers(filters || {}, 1, 10000);
+  const headers = ['Member Number', 'First Name', 'Middle Name', 'Last Name', 'Email Address', 'IEEE Status', 'Expiry Date', 'Status', 'Region', 'Section', 'School Section', 'School Name', 'Grade', 'Gender', 'Renew Year'];
   const rows = membersToExport.map(m => [
-    m.id,
-    m.firstName || '',
-    m.middleName || '',
-    m.lastName || '',
-    m.emailAddress || m.email || '',
-    m.homeNumber || '',
-    m.membershipLevel || '',
-    m.expiryDate,
-    isActiveMembership(m.expiryDate) ? 'Active' : 'Expired',
-    m.region || '',
-    m.section || '',
-    m.schoolSection || '',
-    m.schoolName || '',
-    m.schoolNumber || '',
-    m.grade || '',
-    m.gender || '',
-    m.renewYear || '',
-    m.activeSocietyList || '',
-    m.technicalCommunityList || '',
-    m.technicalCouncilList || '',
-    m.specialInterestGroupList || '',
+    m.id, m.firstName || '', m.middleName || '', m.lastName || '', m.emailAddress || m.email || '', m.membershipLevel || '', m.expiryDate, isActiveMembership(m.expiryDate) ? 'Active' : 'Expired', m.region || '', m.section || '', m.schoolSection || '', m.schoolName || '', m.grade || '', m.gender || '', m.renewYear || ''
   ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
-
   return [headers.join(','), ...rows].join('\n');
 }
 
 export async function getMembersCount(): Promise<number> {
+  if (db) {
+      const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers);
+      return Number(totalCount.count);
+  }
   return inMemoryMembers.length;
 }
 
 export async function getAllMembersList(): Promise<InMemoryMember[]> {
+  if (db) {
+      const dbResults = await db.select().from(dbMembers);
+      return dbResults.map(mapDbToMember);
+  }
   return [...inMemoryMembers];
 }

@@ -56,11 +56,14 @@ The primary mission of the IEEE VALIDATOR is to ensure operational integrity wit
 2. **Environment Configuration**:
    Create a `.env.local` file:
    ```env
-   # Clerk Authentication
+   # Clerk Authentication Configuration
    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
    CLERK_SECRET_KEY=sk_test_...
 
-   # Data Persistence (Optional)
+   # Vercel Blob Storage (Required for persistent file storage)
+   BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
+
+   # Database Persistence (Required for cloud storage)
    DATABASE_URL=postgresql://...
    ```
 3. **Build and Launch**:

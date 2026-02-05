@@ -75,6 +75,17 @@ export const uploadHistory = pgTable('upload_history', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// Persistent datasets stored in Vercel Blob
+export const datasets = pgTable('datasets', {
+  id: serial('id').primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  url: text('url').notNull(),
+  rowCount: integer('row_count').default(0),
+  isActive: boolean('is_active').default(false),
+  uploadedBy: varchar('uploaded_by', { length: 255 }),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 // Types for the schema
 export type Member = typeof members.$inferSelect;
 export type NewMember = typeof members.$inferInsert;
@@ -82,3 +93,5 @@ export type UserRole = typeof userRoles.$inferSelect;
 export type NewUserRole = typeof userRoles.$inferInsert;
 export type ActivityLog = typeof activityLogs.$inferSelect;
 export type UploadHistory = typeof uploadHistory.$inferSelect;
+export type Dataset = typeof datasets.$inferSelect;
+export type NewDataset = typeof datasets.$inferInsert;

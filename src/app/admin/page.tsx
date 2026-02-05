@@ -5,9 +5,10 @@ import { CsvUploader } from '@/components/CsvUploader';
 import { MemberSearch } from '@/components/MemberSearch';
 import { AnalyticsDashboard } from '@/components/AnalyticsDashboard';
 import { UserManagement } from '@/components/UserManagement';
+import { DatasetManager } from '@/components/DatasetManager';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { BarChart3, Search, Upload, Users, UserSearch } from 'lucide-react';
+import { BarChart3, Search, Upload, Users, UserSearch, Database } from 'lucide-react';
 
 export default function AdminPage() {
   return (
@@ -24,7 +25,7 @@ export default function AdminPage() {
       </div>
 
       <Tabs defaultValue="analytics" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:grid-cols-5 mb-8">
+        <TabsList className="grid w-full grid-cols-2 md:grid-cols-6 mb-8">
           <TabsTrigger value="analytics" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
             <span className="hidden sm:inline">Analytics</span>
@@ -40,6 +41,10 @@ export default function AdminPage() {
           <TabsTrigger value="upload" className="flex items-center gap-2">
             <Upload className="h-4 w-4" />
             <span className="hidden sm:inline">Upload</span>
+          </TabsTrigger>
+          <TabsTrigger value="datasets" className="flex items-center gap-2">
+            <Database className="h-4 w-4" />
+            <span className="hidden sm:inline">Datasets</span>
           </TabsTrigger>
           <TabsTrigger value="users" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
@@ -65,6 +70,10 @@ export default function AdminPage() {
           <div className="max-w-xl mx-auto">
             <CsvUploader />
           </div>
+        </TabsContent>
+
+        <TabsContent value="datasets">
+          <DatasetManager />
         </TabsContent>
 
         <TabsContent value="users">
