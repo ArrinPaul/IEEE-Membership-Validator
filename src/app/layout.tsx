@@ -6,7 +6,7 @@ import { Header } from '@/components/layout/Header';
 import { ThemeProvider, AuthProvider } from '@/components/providers';
 
 export const metadata: Metadata = {
-  title: 'IEEE Validate',
+  title: 'IEEE VALIDATOR',
   description: 'Validate IEEE Memberships for your university',
   keywords: ['IEEE', 'membership', 'validation', 'verification', 'student branch'],
 };
@@ -38,7 +38,7 @@ export default function RootLayout({
               <Header />
               <main className="flex-1">{children}</main>
               <footer className="border-t py-6 text-center text-sm text-muted-foreground">
-                <p>© {new Date().getFullYear()} IEEE Membership Validator. All rights reserved.</p>
+                <p>© {new Date().getFullYear()} IEEE VALIDATOR. All rights reserved.</p>
               </footer>
             </div>
             <Toaster />
