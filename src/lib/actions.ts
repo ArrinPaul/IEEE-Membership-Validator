@@ -344,7 +344,7 @@ export async function uploadMembersCsv(
   }
 
   try {
-    const blob = await put(file.name, file, { access: 'public' });
+    const blob = await put(file.name, file, { access: 'public', addRandomSuffix: true });
     const buffer = await file.arrayBuffer();
     const fileName = file.name.toLowerCase();
 
