@@ -46,7 +46,8 @@ export default clerkMiddleware(async (auth, req) => {
       const client = await clerkClient();
       const user = await client.users.getUser(userId);
       userRole = (user.publicMetadata?.role as string) || 'user';
-    } catch (e) {
+    } catch (error) {
+      console.error('Middleware error fetching user role:', error);
       userRole = 'user';
     }
   } else if (!userRole) {

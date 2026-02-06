@@ -2,7 +2,6 @@
 
 import { auth, clerkClient } from '@clerk/nextjs/server';
 import { db, userRoles } from '@/lib/db';
-import { eq } from 'drizzle-orm';
 
 export type UserRole = 'admin' | 'volunteer' | 'user';
 

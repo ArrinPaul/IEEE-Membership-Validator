@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ShieldCheck, Moon, Sun, Menu } from 'lucide-react';
+import { Moon, Sun, Menu } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { SignInButton, SignUpButton, UserButton, useAuth } from '@clerk/nextjs';
 import { Button } from '@/components/ui/button';

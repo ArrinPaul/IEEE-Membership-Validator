@@ -85,17 +85,8 @@ function isActiveMembership(expiryDate: string | Date | null): boolean {
   return new Date(expiryDate) > new Date();
 }
 
-// Helper function to check if membership expires within 30 days
-function expiresSoon(expiryDate: string | Date | null): boolean {
-  if (!expiryDate) return false;
-  const expiry = new Date(expiryDate);
-  const now = new Date();
-  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-  return expiry > now && expiry <= thirtyDaysFromNow;
-}
-
 // Clean CSV value helper
-function cleanCsvValue(v: any): string {
+function cleanCsvValue(v: unknown): string {
   if (v === undefined || v === null) return '';
   let value = String(v).trim();
   if (value.startsWith('="') && value.endsWith('"')) {
@@ -157,7 +148,7 @@ async function parseExcel(buffer: ArrayBuffer): Promise<{ headers: string[]; row
 }
 
 // Convert row data to member object for DB
-function rowToDbMember(values: string[], headerMap: Record<string, number>, datasetId?: number): any {
+function rowToDbMember(values: string[], headerMap: Record<string, number>, datasetId?: number): Record<string, unknown> {
   const getValue = (key: string) => values[headerMap[key]] || '';
   const renewYearValue = getValue('Renew Year');
   
@@ -191,30 +182,30 @@ function rowToDbMember(values: string[], headerMap: Record<string, number>, data
 }
 
 // Map DB record to UI Member type
-function mapDbToMember(m: any): InMemoryMember {
+function mapDbToMember(m: Record<string, unknown>): InMemoryMember {
   return {
-    id: m.memberNumber,
+    id: m.memberNumber as string,
     name: `${m.firstName} ${m.lastName}`.trim(),
-    email: m.email || '',
-    membershipLevel: m.membershipLevel || '',
-    expiryDate: m.expiryDate?.toISOString() || new Date().toISOString(),
-    region: m.region || '',
-    section: m.section || '',
-    schoolSection: m.schoolSection || '',
-    schoolName: m.schoolName || '',
-    firstName: m.firstName,
-    middleName: m.middleName || '',
-    lastName: m.lastName,
-    emailAddress: m.email || '',
-    grade: m.grade || '',
-    gender: m.gender || '',
-    renewYear: m.renewYear || '',
+    email: (m.email as string) || '',
+    membershipLevel: (m.membershipLevel as string) || '',
+    expiryDate: (m.expiryDate as Date)?.toISOString() || new Date().toISOString(),
+    region: (m.region as string) || '',
+    section: (m.section as string) || '',
+    schoolSection: (m.schoolSection as string) || '',
+    schoolName: (m.schoolName as string) || '',
+    firstName: m.firstName as string,
+    middleName: (m.middleName as string) || '',
+    lastName: m.lastName as string,
+    emailAddress: (m.email as string) || '',
+    grade: (m.grade as string) || '',
+    gender: (m.gender as string) || '',
+    renewYear: (m.renewYear as string) || '',
     schoolNumber: '', 
     homeNumber: '', 
-    activeSocietyList: m.activeSocietyList || '',
-    technicalCommunityList: m.technicalCommunityList || '',
-    technicalCouncilList: m.technicalCouncilList || '',
-    specialInterestGroupList: m.specialInterestGroupList || '',
+    activeSocietyList: (m.activeSocietyList as string) || '',
+    technicalCommunityList: (m.technicalCommunityList as string) || '',
+    technicalCouncilList: (m.technicalCouncilList as string) || '',
+    specialInterestGroupList: (m.specialInterestGroupList as string) || '',
   };
 }
 
@@ -261,7 +252,7 @@ export async function validateMembership(
         .limit(1);
         
     if (results.length > 0) {
-      member = mapDbToMember(results[0]);
+      member = mapDbToMember(results[0] as unknown as Record<string, unknown>);
     }
   } else {
     member = inMemoryMembers.find((m) => m.id === membershipId);
@@ -318,7 +309,7 @@ export async function getAdminMemberDetails(
         .limit(1);
 
     if (results.length > 0) {
-      member = mapDbToMember(results[0]);
+      member = mapDbToMember(results[0] as unknown as Record<string, unknown>);
     }
   } else {
     member = inMemoryMembers.find((m) => m.id === membershipId);
@@ -390,16 +381,33 @@ export async function uploadMembersCsv(
       // 4. Batch insert members
       const batchSize = 100;
       for (let i = 0; i < membersData.length; i += batchSize) {
-        await db.insert(dbMembers).values(membersData.slice(i, i + batchSize));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await db.insert(dbMembers).values(membersData.slice(i, i + batchSize) as any[]);
       }
       
       revalidatePath('/admin');
       revalidatePath('/volunteer');
       return { status: 'success', message: `Dataset "${file.name}" uploaded and set as active.`, membersAdded: membersData.length };
     }
-    return { status: 'error', message: 'Database not connected.' };
-  } catch (e) {
-    return { status: 'error', message: e instanceof Error ? e.message : 'Unknown error' };
+    
+    // In-memory fallback if no database is connected
+    const membersData = rows.map(row => rowToDbMember(row, headerMap));
+    const inMemoryMembersData = membersData.map(m => mapDbToMember(m as Record<string, unknown>));
+    
+    // Clear existing and add new
+    inMemoryMembers.length = 0;
+    inMemoryMembers.push(...inMemoryMembersData);
+    
+    revalidatePath('/admin');
+    revalidatePath('/volunteer');
+    return { 
+      status: 'success', 
+      message: `Dataset "${file.name}" uploaded to temporary memory. Note: Persistence requires a valid DATABASE_URL in your .env file.`, 
+      membersAdded: inMemoryMembersData.length 
+    };
+  } catch (error) {
+    console.error('Upload error:', error);
+    return { status: 'error', message: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
 
@@ -427,7 +435,8 @@ export async function activateDataset(datasetId: number): Promise<{ success: boo
     revalidatePath('/volunteer');
     revalidatePath('/');
     return { success: true, message: `Dataset "${dataset.name}" is now the active source.` };
-  } catch (e) {
+  } catch (error) {
+    console.error('Activation error:', error);
     return { success: false, message: 'Activation failed.' };
   }
 }
@@ -450,7 +459,8 @@ export async function deleteDataset(datasetId: number): Promise<{ success: boole
         return { success: true, message: 'Dataset and its member data permanently removed.' };
       }
       return { success: false, message: 'Dataset not found.' };
-    } catch (e) {
+    } catch (error) {
+      console.error('Delete dataset error:', error);
       return { success: false, message: 'Failed to delete dataset.' };
     }
 }
@@ -461,7 +471,8 @@ export async function deactivateAllDatasets(): Promise<{ success: boolean; messa
         await db.update(dbDatasets).set({ isActive: false });
         revalidatePath('/admin');
         return { success: true, message: 'All datasets disabled. App is currently empty.' };
-    } catch (e) {
+    } catch (error) {
+        console.error('Deactivate error:', error);
         return { success: false, message: 'Operation failed.' };
     }
 }
@@ -472,7 +483,8 @@ export async function clearAllMembers(): Promise<{ success: boolean; message: st
         await db.delete(dbMembers);
         revalidatePath('/admin');
         return { success: true, message: 'All membership records wiped.' };
-    } catch (e) {
+    } catch (error) {
+        console.error('Clear members error:', error);
         return { success: false, message: 'Wipe failed.' };
     }
 }
@@ -484,7 +496,7 @@ export async function searchMembers(filters: SearchFilters, page = 1, pageSize =
     const activeId = await getActiveDatasetId();
     if (!activeId) return { members: [], total: 0, page: 1, pageSize: 20, totalPages: 0 };
 
-    let whereClauses = [eq(dbMembers.datasetId, activeId)];
+    const whereClauses = [eq(dbMembers.datasetId, activeId)];
     
     if (filters.query) {
       const q = `%${filters.query}%`;
@@ -513,12 +525,41 @@ export async function searchMembers(filters: SearchFilters, page = 1, pageSize =
     const results = await db.select().from(dbMembers).where(finalWhere).limit(pageSize).offset((page - 1) * pageSize);
 
     return {
-      members: results.map(mapDbToMember),
+      members: results.map(r => mapDbToMember(r as unknown as Record<string, unknown>)),
       total, page, pageSize,
       totalPages: Math.ceil(total / pageSize),
     };
   }
-  return { members: [], total: 0, page: 1, pageSize: 20, totalPages: 0 };
+  
+  // In-memory search fallback
+  let filtered = [...inMemoryMembers];
+  if (filters.query) {
+    const q = filters.query.toLowerCase();
+    filtered = filtered.filter(m => 
+        m.id.toLowerCase().includes(q) || 
+        m.name.toLowerCase().includes(q) || 
+        m.email.toLowerCase().includes(q) ||
+        m.schoolName?.toLowerCase().includes(q)
+    );
+  }
+  if (filters.status && filters.status !== 'all') {
+      const now = new Date();
+      filtered = filtered.filter(m => {
+          const isActive = new Date(m.expiryDate) > now;
+          return filters.status === 'active' ? isActive : !isActive;
+      });
+  }
+  if (filters.region) filtered = filtered.filter(m => m.region === filters.region);
+  if (filters.school) filtered = filtered.filter(m => m.schoolName === filters.school);
+  if (filters.membershipLevel) filtered = filtered.filter(m => m.membershipLevel === filters.membershipLevel);
+
+  const total = filtered.length;
+  const start = (page - 1) * pageSize;
+  return {
+      members: filtered.slice(start, start + pageSize),
+      total, page, pageSize,
+      totalPages: Math.ceil(total / pageSize),
+  };
 }
 
 export async function getFilterOptions(): Promise<{
@@ -540,7 +581,13 @@ export async function getFilterOptions(): Promise<{
       membershipLevels: levels.map(l => l.val).filter(Boolean).sort() as string[],
     };
   }
-  return { regions: [], schools: [], membershipLevels: [] };
+  
+  // In-memory filter options
+  return {
+      regions: [...new Set(inMemoryMembers.map(m => m.region).filter(Boolean))].sort() as string[],
+      schools: [...new Set(inMemoryMembers.map(m => m.schoolName).filter(Boolean))].sort() as string[],
+      membershipLevels: [...new Set(inMemoryMembers.map(m => m.membershipLevel).filter(Boolean))].sort() as string[],
+  };
 }
 
 // ============ ANALYTICS ACTIONS ============
@@ -572,7 +619,37 @@ export async function getAnalytics(): Promise<AnalyticsData> {
         membersByStatus: [{ status: 'Active', count: active }, { status: 'Expired', count: total - active }],
     };
   }
-  return { totalMembers: 0, activeMembers: 0, expiredMembers: 0, expiringSoon: 0, membersByRegion: [], membersBySchool: [], membersByLevel: [], membersByStatus: [] };
+  
+  // In-memory analytics
+  const now = new Date();
+  const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+  
+  const total = inMemoryMembers.length;
+  const active = inMemoryMembers.filter(m => new Date(m.expiryDate) > now).length;
+  const expiringSoon = inMemoryMembers.filter(m => {
+      const d = new Date(m.expiryDate);
+      return d > now && d <= thirtyDaysFromNow;
+  }).length;
+  
+  const groupBy = (arr: Record<string, unknown>[], key: string) => {
+      return arr.reduce((acc: Record<string, number>, obj) => {
+          const val = (obj[key] as string) || 'Unknown';
+          acc[val] = (acc[val] || 0) + 1;
+          return acc;
+      }, {} as Record<string, number>);
+  };
+  
+  const regionStats = groupBy(inMemoryMembers as unknown as Record<string, unknown>[], 'region');
+  const schoolStats = groupBy(inMemoryMembers as unknown as Record<string, unknown>[], 'schoolName');
+  const levelStats = groupBy(inMemoryMembers as unknown as Record<string, unknown>[], 'membershipLevel');
+  
+  return {
+      totalMembers: total, activeMembers: active, expiredMembers: total - active, expiringSoon,
+      membersByRegion: Object.entries(regionStats).map(([region, count]) => ({ region, count: count as number })).sort((a, b) => (b.count as number) - (a.count as number)).slice(0, 10),
+      membersBySchool: Object.entries(schoolStats).map(([school, count]) => ({ school, count: count as number })).sort((a, b) => (b.count as number) - (a.count as number)).slice(0, 10),
+      membersByLevel: Object.entries(levelStats).map(([level, count]) => ({ level, count: count as number })),
+      membersByStatus: [{ status: 'Active', count: active }, { status: 'Expired', count: total - active }],
+  };
 }
 
 // ============ EXPORT ACTIONS ============
@@ -593,7 +670,7 @@ export async function getMembersCount(): Promise<number> {
       const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(dbMembers).where(eq(dbMembers.datasetId, activeId));
       return Number(totalCount.count);
   }
-  return 0;
+  return inMemoryMembers.length;
 }
 
 export async function getAllMembersList(): Promise<InMemoryMember[]> {
@@ -601,7 +678,8 @@ export async function getAllMembersList(): Promise<InMemoryMember[]> {
       const activeId = await getActiveDatasetId();
       if (!activeId) return [];
       const dbResults = await db.select().from(dbMembers).where(eq(dbMembers.datasetId, activeId));
-      return dbResults.map(mapDbToMember);
+      return dbResults.map(r => mapDbToMember(r as unknown as Record<string, unknown>));
   }
-  return [];
+  return inMemoryMembers;
 }
+

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -35,6 +34,7 @@ export function UserManagement() {
       const userList = await getAllUsers();
       setUsers(userList);
     } catch (error) {
+      console.error('Failed to load users:', error);
       toast.error('Failed to load users');
     } finally {
       setIsLoading(false);
@@ -52,6 +52,7 @@ export function UserManagement() {
         toast.error(result.message);
       }
     } catch (error) {
+      console.error('Failed to update user role:', error);
       toast.error('Failed to update user role');
     } finally {
       setUpdatingUserId(null);

@@ -51,8 +51,8 @@ export function AnalyticsDashboard() {
   }
 
   const statusData = [
-    { name: 'Active', value: analytics.activeMembers, color: '#22c55e' },
-    { name: 'Expired', value: analytics.expiredMembers, color: '#ef4444' },
+    { name: 'Active', value: analytics.activeMembers },
+    { name: 'Expired', value: analytics.expiredMembers },
   ];
 
   return (
@@ -135,7 +135,7 @@ export function AnalyticsDashboard() {
                     dataKey="value"
                   >
                     {statusData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
                   <Tooltip />

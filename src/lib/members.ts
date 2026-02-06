@@ -37,4 +37,4 @@ if (!global.__members) {
   global.__members = [];
 }
 
-export let members: Member[] = global.__members;
+export const members: Member[] = global.__members;

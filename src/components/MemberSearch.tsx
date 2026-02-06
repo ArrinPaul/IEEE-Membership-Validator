@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useState, useEffect, useTransition, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -29,18 +29,18 @@ export function MemberSearch() {
   }>({ regions: [], schools: [], membershipLevels: [] });
   const [currentPage, setCurrentPage] = useState(1);
 
-  useEffect(() => {
-    getFilterOptions().then(setFilterOptions);
-    handleSearch();
-  }, []);
-
-  const handleSearch = (page = 1) => {
+  const handleSearch = useCallback((page = 1) => {
     startTransition(async () => {
       const searchResult = await searchMembers(filters, page, 10);
       setResult(searchResult);
       setCurrentPage(page);
     });
-  };
+  }, [filters]);
+
+  useEffect(() => {
+    getFilterOptions().then(setFilterOptions);
+    handleSearch();
+  }, [handleSearch]);
 
   const handleExport = async () => {
     setIsExporting(true);
@@ -55,6 +55,7 @@ export function MemberSearch() {
       URL.revokeObjectURL(url);
       toast.success('Export completed successfully!');
     } catch (error) {
+      console.error('Export failed:', error);
       toast.error('Failed to export data');
     } finally {
       setIsExporting(false);

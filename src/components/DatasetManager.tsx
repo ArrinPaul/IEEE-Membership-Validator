@@ -25,6 +25,7 @@ export function DatasetManager() {
       const data = await getDatasets();
       setDatasets(data);
     } catch (error) {
+      console.error('Failed to load dataset history:', error);
       toast.error('Failed to load dataset history');
     } finally {
       setIsLoading(false);
@@ -42,6 +43,7 @@ export function DatasetManager() {
         toast.error(result.message);
       }
     } catch (error) {
+      console.error('Activation failed:', error);
       toast.error('Activation failed');
     } finally {
       setActionId(null);
@@ -58,6 +60,7 @@ export function DatasetManager() {
               loadDatasets();
           }
       } catch (error) {
+          console.error('Deletion failed:', error);
           toast.error('Deletion failed');
       } finally {
           setActionId(null);
@@ -74,6 +77,7 @@ export function DatasetManager() {
               loadDatasets();
           }
       } catch (error) {
+          console.error('Wipe failed:', error);
           toast.error('Wipe failed');
       } finally {
           setIsWiping(false);
